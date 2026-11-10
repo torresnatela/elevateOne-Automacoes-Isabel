@@ -1,5 +1,4 @@
 import { AppError } from "@/server/lib/errors";
-import type { Session } from "@/server/models/session.model";
 import type { Role } from "@/server/models/user.model";
 
 export class UnauthorizedError extends AppError {
@@ -25,15 +24,18 @@ const PERMISSIONS = {
 
 export type Action = keyof typeof PERMISSIONS;
 
-export function hasRole(session: Session | null | undefined, role: Role): boolean {
+/** Qualquer objeto com papel: Session, PublicUser etc. */
+type Subject = { role: Role } | null | undefined;
+
+export function hasRole(session: Subject, role: Role): boolean {
   return !!session && ROLE_LEVEL[session.role] >= ROLE_LEVEL[role];
 }
 
-export function can(session: Session | null | undefined, action: Action): boolean {
+export function can(session: Subject, action: Action): boolean {
   return hasRole(session, PERMISSIONS[action]);
 }
 
-export function requireRole(session: Session | null | undefined, role: Role): Session {
+export function requireRole<T extends { role: Role }>(session: T | null | undefined, role: Role): T {
   if (!session) throw new UnauthorizedError();
   if (!hasRole(session, role)) throw new ForbiddenError();
   return session;
