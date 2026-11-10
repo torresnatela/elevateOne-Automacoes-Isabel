@@ -3,7 +3,10 @@ import { ZodError } from "zod";
 import { AppError } from "./errors";
 
 export function errorResponse(status: number, code: string, message: string, details?: unknown) {
-  return NextResponse.json({ error: { code, message, ...(details ? { details } : {}) } }, { status });
+  return NextResponse.json(
+    { error: { code, message, ...(details ? { details } : {}) } },
+    { status },
+  );
 }
 
 /** Converte exceções conhecidas em respostas HTTP padronizadas. */

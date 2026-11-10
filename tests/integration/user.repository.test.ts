@@ -27,7 +27,12 @@ describe("PrismaUserRepository", () => {
   });
 
   it("upsertByEmail não duplica nem sobrescreve usuário existente", async () => {
-    const first = await repo.upsertByEmail({ name: "A", email: "a@a.com", passwordHash: "h1", role: "ADMIN" });
+    const first = await repo.upsertByEmail({
+      name: "A",
+      email: "a@a.com",
+      passwordHash: "h1",
+      role: "ADMIN",
+    });
     const second = await repo.upsertByEmail({ name: "B", email: "A@a.com", passwordHash: "h2" });
     expect(second.id).toBe(first.id);
     expect(second.passwordHash).toBe("h1");

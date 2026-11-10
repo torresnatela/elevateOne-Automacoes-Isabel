@@ -43,9 +43,9 @@ describe("AuthService.authenticate", () => {
 
   it("falha com usuário inativo (mesmo erro genérico)", async () => {
     repo.users[0].active = false;
-    await expect(service.authenticate("admin@elevateone.local", "Admin@123")).rejects.toBeInstanceOf(
-      InvalidCredentialsError,
-    );
+    await expect(
+      service.authenticate("admin@elevateone.local", "Admin@123"),
+    ).rejects.toBeInstanceOf(InvalidCredentialsError);
   });
 });
 

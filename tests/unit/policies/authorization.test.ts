@@ -1,4 +1,10 @@
-import { can, hasRole, requireRole, ForbiddenError, UnauthorizedError } from "@/server/policies/authorization";
+import {
+  can,
+  hasRole,
+  requireRole,
+  ForbiddenError,
+  UnauthorizedError,
+} from "@/server/policies/authorization";
 import type { Session } from "@/server/models/session.model";
 
 const admin: Session = { userId: "1", name: "A", email: "a@a.com", role: "ADMIN" };

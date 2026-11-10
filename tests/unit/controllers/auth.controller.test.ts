@@ -31,7 +31,9 @@ describe("AuthController", () => {
 
   describe("login", () => {
     it("200 + cookie de sessão httpOnly com credenciais válidas", async () => {
-      const res = await controller.login(jsonRequest({ email: "admin@elevateone.local", password: "Admin@123" }));
+      const res = await controller.login(
+        jsonRequest({ email: "admin@elevateone.local", password: "Admin@123" }),
+      );
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.user).toMatchObject({ email: "admin@elevateone.local", role: "ADMIN" });
@@ -55,7 +57,9 @@ describe("AuthController", () => {
     });
 
     it("401 com senha errada e sem cookie", async () => {
-      const res = await controller.login(jsonRequest({ email: "admin@elevateone.local", password: "x" }));
+      const res = await controller.login(
+        jsonRequest({ email: "admin@elevateone.local", password: "x" }),
+      );
       expect(res.status).toBe(401);
       expect((await res.json()).error.message).toBe("E-mail ou senha inválidos");
       expect(res.cookies.get(SESSION_COOKIE)).toBeUndefined();
@@ -75,7 +79,12 @@ describe("AuthController", () => {
   describe("me", () => {
     it("200 com o usuário da sessão válida", async () => {
       const user = repo.users[0];
-      const token = await createSessionToken({ userId: user.id, name: user.name, email: user.email, role: user.role });
+      const token = await createSessionToken({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      });
       const res = await controller.me(jsonRequest({}, `${SESSION_COOKIE}=${token}`));
       expect(res.status).toBe(200);
       expect((await res.json()).user).toMatchObject({ id: user.id, email: user.email });
@@ -88,7 +97,12 @@ describe("AuthController", () => {
 
     it("401 se o usuário foi desativado após o login", async () => {
       const user = repo.users[0];
-      const token = await createSessionToken({ userId: user.id, name: user.name, email: user.email, role: user.role });
+      const token = await createSessionToken({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      });
       user.active = false;
       const res = await controller.me(jsonRequest({}, `${SESSION_COOKIE}=${token}`));
       expect(res.status).toBe(401);

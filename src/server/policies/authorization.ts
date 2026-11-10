@@ -35,7 +35,10 @@ export function can(session: Subject, action: Action): boolean {
   return hasRole(session, PERMISSIONS[action]);
 }
 
-export function requireRole<T extends { role: Role }>(session: T | null | undefined, role: Role): T {
+export function requireRole<T extends { role: Role }>(
+  session: T | null | undefined,
+  role: Role,
+): T {
   if (!session) throw new UnauthorizedError();
   if (!hasRole(session, role)) throw new ForbiddenError();
   return session;

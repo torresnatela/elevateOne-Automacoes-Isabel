@@ -27,7 +27,9 @@ export async function createSessionToken(
     .sign(getSecret());
 }
 
-export async function verifySessionToken(token: string | undefined | null): Promise<Session | null> {
+export async function verifySessionToken(
+  token: string | undefined | null,
+): Promise<Session | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });

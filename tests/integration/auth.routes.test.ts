@@ -11,7 +11,10 @@ vi.mock("server-only", () => ({}));
 function req(path: string, init: { method?: string; body?: unknown; cookie?: string } = {}) {
   return new NextRequest(`http://localhost${path}`, {
     method: init.method ?? "GET",
-    headers: { "content-type": "application/json", ...(init.cookie ? { cookie: init.cookie } : {}) },
+    headers: {
+      "content-type": "application/json",
+      ...(init.cookie ? { cookie: init.cookie } : {}),
+    },
     body: init.body ? JSON.stringify(init.body) : undefined,
   });
 }
@@ -32,7 +35,10 @@ describe("rotas /api/auth (Postgres real)", () => {
 
   it("login -> me -> logout", async () => {
     const loginRes = await login(
-      req("/api/auth/login", { method: "POST", body: { email: "admin@elevateone.local", password: "Admin@123" } }),
+      req("/api/auth/login", {
+        method: "POST",
+        body: { email: "admin@elevateone.local", password: "Admin@123" },
+      }),
     );
     expect(loginRes.status).toBe(200);
     const token = loginRes.cookies.get(SESSION_COOKIE)?.value;
@@ -40,7 +46,10 @@ describe("rotas /api/auth (Postgres real)", () => {
 
     const meRes = await me(req("/api/auth/me", { cookie: `${SESSION_COOKIE}=${token}` }));
     expect(meRes.status).toBe(200);
-    expect((await meRes.json()).user).toMatchObject({ email: "admin@elevateone.local", role: "ADMIN" });
+    expect((await meRes.json()).user).toMatchObject({
+      email: "admin@elevateone.local",
+      role: "ADMIN",
+    });
 
     const logoutRes = await logout();
     expect(logoutRes.cookies.get(SESSION_COOKIE)?.maxAge).toBe(0);
@@ -48,7 +57,10 @@ describe("rotas /api/auth (Postgres real)", () => {
 
   it("login com senha errada retorna 401", async () => {
     const res = await login(
-      req("/api/auth/login", { method: "POST", body: { email: "admin@elevateone.local", password: "nope" } }),
+      req("/api/auth/login", {
+        method: "POST",
+        body: { email: "admin@elevateone.local", password: "nope" },
+      }),
     );
     expect(res.status).toBe(401);
   });

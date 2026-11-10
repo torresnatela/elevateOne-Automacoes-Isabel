@@ -51,7 +51,9 @@ describe("<LoginForm />", () => {
   });
 
   it("exibe a mensagem de erro da API e não redireciona", async () => {
-    mockFetch(401, { error: { code: "INVALID_CREDENTIALS", message: "E-mail ou senha inválidos" } });
+    mockFetch(401, {
+      error: { code: "INVALID_CREDENTIALS", message: "E-mail ou senha inválidos" },
+    });
     render(<LoginForm />);
     await fillAndSubmit("admin@elevateone.local", "errada");
 

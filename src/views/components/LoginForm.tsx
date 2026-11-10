@@ -44,7 +44,13 @@ export function LoginForm({ next }: { next?: string }) {
       <input id="email" name="email" type="email" autoComplete="username" required />
 
       <label htmlFor="password">Senha</label>
-      <input id="password" name="password" type="password" autoComplete="current-password" required />
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autoComplete="current-password"
+        required
+      />
 
       {error && (
         <p role="alert" className="error">

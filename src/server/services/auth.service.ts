@@ -17,7 +17,10 @@ const DUMMY_HASH = "$2b$10$/AU6gS8skY6xSIGg6oW3iuX0A/KjNCLWTDOhf1QraPiT8xkuFXNea
 export class AuthService {
   constructor(private readonly users: UserRepository) {}
 
-  async authenticate(email: string, password: string): Promise<{ user: PublicUser; session: Session }> {
+  async authenticate(
+    email: string,
+    password: string,
+  ): Promise<{ user: PublicUser; session: Session }> {
     const user = await this.users.findByEmail(email);
     const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
 
