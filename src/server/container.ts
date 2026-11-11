@@ -16,6 +16,8 @@ import { AgentRunner } from "@/server/agents/core/runner";
 import { AgentRegistry } from "@/server/agents/registry";
 import { AgentSettingsController } from "@/server/controllers/agent-settings.controller";
 import { AuthController } from "@/server/controllers/auth.controller";
+import { HealthController } from "@/server/controllers/health.controller";
+import { OfficeController } from "@/server/controllers/office.controller";
 import { UserAdminController } from "@/server/controllers/user-admin.controller";
 import { WhatsappController } from "@/server/controllers/whatsapp.controller";
 import { GoogleController } from "@/server/controllers/google.controller";
@@ -37,6 +39,7 @@ import { PrismaUserRepository } from "@/server/repositories/user.repository";
 import { AgentSettingsService } from "@/server/services/agent-settings.service";
 import { AuthService } from "@/server/services/auth.service";
 import { GoogleService } from "@/server/services/google.service";
+import { OfficeService } from "@/server/services/office.service";
 import { UserAdminService } from "@/server/services/user-admin.service";
 import { KnowledgeService } from "@/server/services/knowledge.service";
 
@@ -115,3 +118,12 @@ export const chatService = new ChatService(
   INTERNAL_ASSISTANT_ID,
 );
 export const chatController = new ChatController(chatService);
+
+/** O que o AI Office lê. */
+export const officeService = new OfficeService(agentRegistry, agentEventRepository);
+export const officeController = new OfficeController(
+  officeService,
+  () => process.env.OFFICE_API_TOKEN,
+);
+
+export const healthController = new HealthController(() => prisma.$queryRaw`SELECT 1`);

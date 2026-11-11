@@ -83,3 +83,71 @@ Regras da casa:
 - Papéis: `USER` < `ADMIN` (ADMIN herda as permissões de USER). Para uma nova feature:
   registre a ação em `PERMISSIONS` (`policies/authorization.ts`) e, se for por rota, o prefixo em
   `ROUTE_ROLES`.
+
+## Agentes
+
+Cada automação é um **agente** com as suas **ferramentas**, registado em
+`src/server/container.ts`. Os canais (o chat do site, o WhatsApp) entregam-lhe as mensagens.
+
+| Agente               | Canal    | O que faz                                                                       |
+| -------------------- | -------- | ------------------------------------------------------------------------------- |
+| `assistente-interno` | `/chat`  | Tira as dúvidas da equipa com a base de conhecimento do escritório              |
+| `assistente-isabel`  | WhatsApp | Trata da agenda, do email, dos contactos e dos documentos, por texto ou por voz |
+
+```
+src/server/
+  agents/
+    core/          runner (ciclo modelo + ferramentas), tipos, LlmClient
+    definitions/   um ficheiro por agente (instruções, ferramentas, canais)
+    tools/         as ferramentas (zod + execute)
+    registry.ts
+  channels/        whatsapp (o chat do site está em services/chat.service.ts)
+  integrations/    anthropic, openai, google, evolution, documents
+```
+
+**Para acrescentar uma automação:** crie as ferramentas em `agents/tools/`, o agente em
+`agents/definitions/` e registe os dois no `container.ts` (as ferramentas primeiro). Uma
+ferramenta que escreve no mundo (marca, envia, apaga) leva `requiresConfirmation: true` e um
+`describe`: o runner não a corre quando o modelo a pede, guarda-a como ação pendente, mostra a
+quem pediu o resumo escrito pelo `describe` e só a executa depois de uma mensagem nova dessa
+pessoa.
+
+### Páginas
+
+| Página                | Quem  | Para quê                                                      |
+| --------------------- | ----- | ------------------------------------------------------------- |
+| `/chat`               | todos | O chat interno                                                |
+| `/integracoes`        | todos | Ligar a conta Google (cada pessoa liga a sua)                 |
+| `/admin/conhecimento` | ADMIN | Ficheiros da base de conhecimento e instruções de cada agente |
+| `/admin/whatsapp`     | ADMIN | Os números de WhatsApp autorizados a falar com o assistente   |
+
+### Configuração (`.env`)
+
+| Variável                                                                | Para quê                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------ |
+| `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`)             | O modelo dos agentes (Claude)                    |
+| `OPENAI_API_KEY`                                                        | Embeddings da base de conhecimento e transcrição |
+| `APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ENCRYPTION_KEY` | Ligação ao Google                                |
+| `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`          | WhatsApp (Evolution API)                         |
+| `WHATSAPP_WEBHOOK_SECRET`                                               | O segredo que o webhook do WhatsApp exige        |
+| `OFFICE_API_TOKEN`                                                      | O token com que o AI Office lê os eventos        |
+
+Sem uma destas, a parte que depende dela responde com um erro que diz o que falta; o resto
+funciona.
+
+**Google.** No Google Cloud: ative as APIs Calendar, Gmail, People, Drive e Docs e crie
+credenciais OAuth de «Aplicação Web» com o URI de redirecionamento `<APP_URL>/api/google/callback`.
+Com uma conta Workspace, marque a app como «Interna». Com uma conta @gmail.com, o acesso expira a
+cada 7 dias enquanto a app estiver em modo de teste.
+
+**WhatsApp.** `docker compose --profile whatsapp up -d` sobe a Evolution API em `:8080`. Crie a
+instância com o nome de `EVOLUTION_INSTANCE`, leia o QR code com o telemóvel do número do agente
+(um número dedicado: a ligação não é oficial e a Meta pode bloqueá-lo) e aponte o webhook dela
+para `<APP_URL>/api/webhooks/whatsapp`, com o evento `MESSAGES_UPSERT` e o cabeçalho
+`x-webhook-secret`. Depois, dê a cada pessoa o seu número em `/admin/whatsapp`.
+
+### AI Office
+
+Cada tarefa feita, cada falha e cada mudança de estado de um agente fica em `agent_events`, no
+formato do AI Office. O escritório lê-os em `GET /api/office/eventos`: ver
+[docs/ai-office.md](docs/ai-office.md).

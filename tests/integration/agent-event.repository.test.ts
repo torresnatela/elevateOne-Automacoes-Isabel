@@ -33,4 +33,16 @@ describe("PrismaAgentEventRepository", () => {
     expect(events.map((e) => e.text)).toEqual(["2", "3"]);
     await expect(repo.listAfter(0, 10)).resolves.toHaveLength(4);
   });
+
+  it("com um instante, só devolve os eventos a partir dele", async () => {
+    const old = await repo.create({ agent: "eva", state: "WORKING", text: "ontem" });
+    await prisma.agentEvent.update({
+      where: { id: old.id },
+      data: { createdAt: new Date("2026-01-01T00:00:00Z") },
+    });
+    await repo.create({ agent: "eva", state: "WORKING", text: "hoje" });
+
+    const events = await repo.listAfter(0, 10, new Date("2026-06-01T00:00:00Z"));
+    expect(events.map((e) => e.text)).toEqual(["hoje"]);
+  });
 });

@@ -9,8 +9,8 @@ import type {
 /** Contrato de persistência dos eventos que o AI Office mostra. */
 export interface AgentEventRepository {
   create(data: NewAgentEvent): Promise<AgentEvent>;
-  /** Os eventos depois do n.º `afterSeq`, por ordem, até `limit`. */
-  listAfter(afterSeq: number, limit: number): Promise<AgentEvent[]>;
+  /** Os eventos depois do n.º `afterSeq` (e, com `since`, a partir desse instante), por ordem, até `limit`. */
+  listAfter(afterSeq: number, limit: number, since?: Date): Promise<AgentEvent[]>;
 }
 
 function toDomain(row: PrismaAgentEvent): AgentEvent {
@@ -38,9 +38,9 @@ export class PrismaAgentEventRepository implements AgentEventRepository {
     return toDomain(row);
   }
 
-  async listAfter(afterSeq: number, limit: number) {
+  async listAfter(afterSeq: number, limit: number, since?: Date) {
     const rows = await this.db.agentEvent.findMany({
-      where: { seq: { gt: afterSeq } },
+      where: { seq: { gt: afterSeq }, ...(since ? { createdAt: { gte: since } } : {}) },
       orderBy: { seq: "asc" },
       take: limit,
     });

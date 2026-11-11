@@ -61,6 +61,8 @@ export interface AgentDefinition {
   office: {
     /** O id do colaborador no AI Office. */
     agentId: string;
+    /** O que faz, como aparece na ficha dele no escritório: «Tira as dúvidas da equipa». */
+    role?: string;
     /** A linha enquanto trabalha: «A responder a uma dúvida da equipa». */
     workingText: string;
     /** A tarefa que conta quando responde a uma mensagem (sem isto, só contam as ferramentas). */

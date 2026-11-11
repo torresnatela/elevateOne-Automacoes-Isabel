@@ -8,6 +8,9 @@ export const PUBLIC_PATHS = [
   "/forbidden",
   // Os webhooks não têm sessão: cada um confere o seu próprio segredo.
   "/api/webhooks",
+  // O AI Office lê os eventos com o seu próprio token, sem sessão.
+  "/api/office",
+  "/api/health",
 ];
 
 /** Regras de papel mínimo por prefixo de rota (verificadas no middleware). */

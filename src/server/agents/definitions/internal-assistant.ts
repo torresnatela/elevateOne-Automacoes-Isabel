@@ -26,6 +26,7 @@ Escreve em português de Portugal, num tom de colega: direto e simpático. Come�
   channels: ["WEB"],
   office: {
     agentId: INTERNAL_ASSISTANT_ID,
+    role: "Tira as dúvidas da equipa com a base de conhecimento do escritório",
     workingText: "A responder a uma dúvida da equipa",
     done: {
       type: "apoio",

@@ -46,6 +46,7 @@ Como escreves
   channels: ["WHATSAPP"],
   office: {
     agentId: ISABEL_ASSISTANT_ID,
+    role: "Trata da agenda, do email e dos documentos da Isabel pelo WhatsApp",
     workingText: "A tratar de um pedido da Isabel",
   },
 };

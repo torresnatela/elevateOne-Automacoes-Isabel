@@ -118,8 +118,10 @@ export class FakeAgentEventRepository implements AgentEventRepository {
     return event;
   }
 
-  async listAfter(afterSeq: number, limit: number) {
-    return this.events.filter((e) => e.seq > afterSeq).slice(0, limit);
+  async listAfter(afterSeq: number, limit: number, since?: Date) {
+    return this.events
+      .filter((e) => e.seq > afterSeq && (!since || e.createdAt >= since))
+      .slice(0, limit);
   }
 }
 

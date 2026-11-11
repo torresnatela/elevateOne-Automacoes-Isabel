@@ -47,6 +47,8 @@ describe("middleware", () => {
 
   it("deixa passar os webhooks sem sessão (cada um confere o seu segredo), mas não o resto da API", async () => {
     expect((await middleware(req("/api/webhooks/whatsapp"))).status).toBe(200);
+    expect((await middleware(req("/api/office/eventos"))).status).toBe(200);
+    expect((await middleware(req("/api/health"))).status).toBe(200);
     expect((await middleware(req("/api/webhooksfalso"))).status).toBe(401);
     expect((await middleware(req("/api/chat/conversations"))).status).toBe(401);
     expect((await middleware(req("/api/google"))).status).toBe(401);
