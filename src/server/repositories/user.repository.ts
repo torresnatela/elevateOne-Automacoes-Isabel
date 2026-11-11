@@ -5,6 +5,12 @@ import { normalizeEmail, type NewUser, type User } from "@/server/models/user.mo
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
+  /** Quem tem este número de WhatsApp (só dígitos). */
+  findByPhone(phone: string): Promise<User | null>;
+  /** Todos, por nome. */
+  list(): Promise<User[]>;
+  /** Dá ou tira (`null`) o número de WhatsApp. `false` se o utilizador não existe. */
+  setPhone(id: string, phone: string | null): Promise<boolean>;
   create(data: NewUser): Promise<User>;
   /** Cria o usuário se o e-mail não existir; nunca sobrescreve um existente. */
   upsertByEmail(data: NewUser): Promise<User>;
@@ -28,6 +34,21 @@ export class PrismaUserRepository implements UserRepository {
   async findByEmail(email: string) {
     const row = await this.db.user.findUnique({ where: { email: normalizeEmail(email) } });
     return row ? toDomain(row) : null;
+  }
+
+  async findByPhone(phone: string) {
+    const row = await this.db.user.findUnique({ where: { phone } });
+    return row ? toDomain(row) : null;
+  }
+
+  async list() {
+    return (await this.db.user.findMany({ orderBy: { name: "asc" } })).map(toDomain);
+  }
+
+  async setPhone(id: string, phone: string | null) {
+    if (!UUID_RE.test(id)) return false;
+    const { count } = await this.db.user.updateMany({ where: { id }, data: { phone } });
+    return count > 0;
   }
 
   async create(data: NewUser) {

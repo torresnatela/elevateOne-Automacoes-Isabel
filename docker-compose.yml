@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -11,5 +11,31 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+
+  # A ponte para o WhatsApp (não oficial). Só sobe com: docker compose --profile whatsapp up -d
+  # Depois: criar a instância, ler o QR code com o telemóvel do número do agente, e apontar o
+  # webhook (evento MESSAGES_UPSERT) para http://host.docker.internal:3000/api/webhooks/whatsapp
+  # com o cabeçalho x-webhook-secret. Ver o README.
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    profiles: ["whatsapp"]
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      SERVER_URL: http://localhost:8080
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?defina EVOLUTION_API_KEY no .env}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:postgres@db:5432/evolution?schema=public
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - evolution_instances:/evolution/instances
 volumes:
   pgdata:
+  evolution_instances:

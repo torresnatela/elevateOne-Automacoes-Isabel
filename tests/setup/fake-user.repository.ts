@@ -15,6 +15,21 @@ export class FakeUserRepository implements UserRepository {
     return this.users.find((u) => u.email === normalizeEmail(email)) ?? null;
   }
 
+  async findByPhone(phone: string) {
+    return this.users.find((u) => u.phone === phone) ?? null;
+  }
+
+  async list() {
+    return [...this.users].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async setPhone(id: string, phone: string | null) {
+    const user = this.users.find((u) => u.id === id);
+    if (!user) return false;
+    user.phone = phone;
+    return true;
+  }
+
   async create(data: NewUser) {
     const now = new Date();
     const user: User = {
@@ -22,6 +37,7 @@ export class FakeUserRepository implements UserRepository {
       name: data.name,
       email: normalizeEmail(data.email),
       passwordHash: data.passwordHash,
+      phone: null,
       role: data.role ?? "USER",
       active: data.active ?? true,
       createdAt: now,

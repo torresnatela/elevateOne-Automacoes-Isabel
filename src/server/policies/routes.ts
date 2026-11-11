@@ -1,7 +1,14 @@
 import type { Role } from "@/server/models/user.model";
 
 /** Rotas acessíveis sem sessão. */
-export const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout", "/forbidden"];
+export const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/forbidden",
+  // Os webhooks não têm sessão: cada um confere o seu próprio segredo.
+  "/api/webhooks",
+];
 
 /** Regras de papel mínimo por prefixo de rota (verificadas no middleware). */
 export const ROUTE_ROLES: { prefix: string; role: Role }[] = [

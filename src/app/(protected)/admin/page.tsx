@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/lib/current-user";
 import { hasRole } from "@/server/policies/authorization";
@@ -13,6 +14,12 @@ export default async function AdminPage() {
     <section>
       <h1>Administração</h1>
       <p>Área restrita a administradores.</p>
+      <p>
+        <Link href="/admin/conhecimento">Base de conhecimento e instruções dos agentes</Link>
+      </p>
+      <p>
+        <Link href="/admin/whatsapp">Números de WhatsApp autorizados</Link>
+      </p>
     </section>
   );
 }

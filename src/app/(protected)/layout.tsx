@@ -14,6 +14,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <header className="topbar">
         <span className="brand">ElevateOne</span>
         <Link href="/dashboard">Dashboard</Link>
+        <Link href="/chat">Chat</Link>
+        <Link href="/integracoes">Integrações</Link>
         {user.role === "ADMIN" && <Link href="/admin">Admin</Link>}
         <span className="who">
           {user.name} ({user.role})
