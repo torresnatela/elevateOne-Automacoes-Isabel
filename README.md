@@ -118,6 +118,8 @@ pessoa.
 | --------------------- | ----- | ------------------------------------------------------------- |
 | `/chat`               | todos | O chat interno                                                |
 | `/integracoes`        | todos | Ligar a conta Google (cada pessoa liga a sua)                 |
+| `/conta`              | todos | Trocar a própria senha                                        |
+| `/admin/utilizadores` | ADMIN | Criar utilizadores, desativar, repor a senha                  |
 | `/admin/conhecimento` | ADMIN | Ficheiros da base de conhecimento e instruções de cada agente |
 | `/admin/whatsapp`     | ADMIN | Os números de WhatsApp autorizados a falar com o assistente   |
 

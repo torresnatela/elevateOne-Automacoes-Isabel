@@ -33,8 +33,8 @@ curl https://<domínio>/api/health        # {"ok":true}
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
 ```
 
-Depois de entrar, troque a senha do admin por uma que só a pessoa saiba (hoje troca-se no banco;
-ainda não há página para isso).
+Depois de entrar, troque a senha do admin em **A minha conta** (o nome no canto de cima) por uma
+que só a pessoa saiba, e crie os utilizadores da equipa em `/admin/utilizadores`.
 
 ## Ligar o WhatsApp
 
@@ -102,4 +102,7 @@ ela, as contas Google têm de ser ligadas de novo.
 - **Dados de clientes saem do servidor**: o texto das conversas vai para a Anthropic, e os
   ficheiros da base de conhecimento e os áudios vão para a OpenAI. Convém isso constar da
   política de privacidade do escritório (RGPD).
-- **Não há limite de tentativas no login.** Use uma senha forte no admin.
+- **Desativar um utilizador** tira-lhe logo o acesso às páginas, mas a sessão que ele já tinha
+  aberta continua a valer nas chamadas à API até expirar (8 horas, no máximo).
+- **O limite de tentativas no login** (5 senhas erradas em 15 minutos, por endereço e e-mail) vive
+  na memória da app: reiniciá-la limpa a contagem.

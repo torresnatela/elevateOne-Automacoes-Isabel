@@ -2,6 +2,7 @@ import "server-only";
 import { after } from "next/server";
 import { encryptionKey } from "@/server/lib/crypto";
 import { prisma } from "@/server/lib/db";
+import { RateLimiter } from "@/server/lib/rate-limiter";
 import {
   INTERNAL_ASSISTANT_ID,
   internalAssistant,
@@ -46,7 +47,8 @@ import { KnowledgeService } from "@/server/services/knowledge.service";
 /** Composição das dependências (injeção manual). Ponto único para trocar implementações. */
 export const userRepository = new PrismaUserRepository(prisma);
 export const authService = new AuthService(userRepository);
-export const authController = new AuthController(authService);
+// 5 senhas erradas em 15 minutos, por endereço e e-mail, travam novas tentativas.
+export const authController = new AuthController(authService, new RateLimiter(5, 15 * 60_000));
 
 /** Os agentes: cada automação nova regista aqui as suas ferramentas e o seu agente. */
 export const agentRegistry = new AgentRegistry();

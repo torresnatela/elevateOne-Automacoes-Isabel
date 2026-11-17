@@ -11,6 +11,10 @@ export interface UserRepository {
   list(): Promise<User[]>;
   /** Dá ou tira (`null`) o número de WhatsApp. `false` se o utilizador não existe. */
   setPhone(id: string, phone: string | null): Promise<boolean>;
+  /** Troca o hash da senha. `false` se o utilizador não existe. */
+  setPasswordHash(id: string, passwordHash: string): Promise<boolean>;
+  /** Ativa ou desativa. `false` se o utilizador não existe. */
+  setActive(id: string, active: boolean): Promise<boolean>;
   create(data: NewUser): Promise<User>;
   /** Cria o usuário se o e-mail não existir; nunca sobrescreve um existente. */
   upsertByEmail(data: NewUser): Promise<User>;
@@ -48,6 +52,18 @@ export class PrismaUserRepository implements UserRepository {
   async setPhone(id: string, phone: string | null) {
     if (!UUID_RE.test(id)) return false;
     const { count } = await this.db.user.updateMany({ where: { id }, data: { phone } });
+    return count > 0;
+  }
+
+  async setPasswordHash(id: string, passwordHash: string) {
+    if (!UUID_RE.test(id)) return false;
+    const { count } = await this.db.user.updateMany({ where: { id }, data: { passwordHash } });
+    return count > 0;
+  }
+
+  async setActive(id: string, active: boolean) {
+    if (!UUID_RE.test(id)) return false;
+    const { count } = await this.db.user.updateMany({ where: { id }, data: { active } });
     return count > 0;
   }
 

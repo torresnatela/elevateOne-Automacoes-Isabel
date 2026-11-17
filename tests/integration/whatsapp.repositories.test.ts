@@ -103,3 +103,22 @@ describe("WhatsApp e confirmação (Postgres real)", () => {
     expect((await users.list()).map((u) => u.name)).toEqual(["Isabel", "Rui"]);
   });
 });
+
+describe("utilizadores: senha e estado (Postgres real)", () => {
+  beforeEach(resetDatabase);
+
+  it("troca o hash da senha e ativa ou desativa", async () => {
+    const rui = await users.create({ name: "Rui", email: "r@e.pt", passwordHash: "h1" });
+
+    await expect(users.setPasswordHash(rui.id, "h2")).resolves.toBe(true);
+    await expect(users.setActive(rui.id, false)).resolves.toBe(true);
+    await expect(users.findById(rui.id)).resolves.toMatchObject({
+      passwordHash: "h2",
+      active: false,
+    });
+
+    const nobody = "00000000-0000-0000-0000-000000000000";
+    await expect(users.setPasswordHash(nobody, "h")).resolves.toBe(false);
+    await expect(users.setActive("nao-e-uuid", true)).resolves.toBe(false);
+  });
+});

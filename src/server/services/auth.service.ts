@@ -2,7 +2,7 @@ import { AppError } from "@/server/lib/errors";
 import { toPublicUser, type PublicUser } from "@/server/models/user.model";
 import type { Session } from "@/server/models/session.model";
 import type { UserRepository } from "@/server/repositories/user.repository";
-import { verifyPassword } from "./password.service";
+import { hashPassword, verifyPassword } from "./password.service";
 
 export class InvalidCredentialsError extends AppError {
   constructor() {
@@ -35,5 +35,13 @@ export class AuthService {
   async getActiveUser(id: string): Promise<PublicUser | null> {
     const user = await this.users.findById(id);
     return user && user.active ? toPublicUser(user) : null;
+  }
+
+  /** Troca a senha de quem está autenticado, conferindo a atual. */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.users.findById(userId);
+    if (!user || !user.active || !(await verifyPassword(currentPassword, user.passwordHash)))
+      throw new AppError("A senha atual não está certa.", 400, "INVALID_CURRENT_PASSWORD");
+    await this.users.setPasswordHash(user.id, await hashPassword(newPassword));
   }
 }

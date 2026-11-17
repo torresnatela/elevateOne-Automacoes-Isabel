@@ -30,6 +30,20 @@ export class FakeUserRepository implements UserRepository {
     return true;
   }
 
+  async setPasswordHash(id: string, passwordHash: string) {
+    const user = this.users.find((u) => u.id === id);
+    if (!user) return false;
+    user.passwordHash = passwordHash;
+    return true;
+  }
+
+  async setActive(id: string, active: boolean) {
+    const user = this.users.find((u) => u.id === id);
+    if (!user) return false;
+    user.active = active;
+    return true;
+  }
+
   async create(data: NewUser) {
     const now = new Date();
     const user: User = {

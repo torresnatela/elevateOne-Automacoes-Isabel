@@ -15,6 +15,9 @@ export default async function AdminPage() {
       <h1>Administração</h1>
       <p>Área restrita a administradores.</p>
       <p>
+        <Link href="/admin/utilizadores">Utilizadores</Link>
+      </p>
+      <p>
         <Link href="/admin/conhecimento">Base de conhecimento e instruções dos agentes</Link>
       </p>
       <p>

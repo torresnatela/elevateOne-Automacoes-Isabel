@@ -310,3 +310,15 @@ a.button {
   color: var(--text);
   font-size: 0.95rem;
 }
+.form select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+.topbar a.who:hover {
+  color: var(--text);
+}

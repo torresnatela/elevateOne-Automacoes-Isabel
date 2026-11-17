@@ -27,7 +27,7 @@ test("usuário padrão faz login, acessa admin e sai", async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Olá, Administrador" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Admin" }).click();
+  await page.getByRole("link", { name: "Admin", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Administração" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sair" }).click();
@@ -40,7 +40,7 @@ test("usuário comum não acessa /admin (403)", async ({ page }) => {
   await page.goto("/login");
   await login(page, "user@elevateone.local", "User@1234");
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
 
   const res = await page.goto("/admin");
   expect(res?.status()).toBe(403);
