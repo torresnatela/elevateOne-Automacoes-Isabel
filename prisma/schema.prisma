@@ -13,14 +13,177 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  role         Role     @default(USER)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  email              String              @unique
+  passwordHash       String              @map("password_hash")
+  /// O número de WhatsApp autorizado a falar com os agentes (só dígitos, com o indicativo).
+  phone              String?             @unique
+  role               Role                @default(USER)
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  conversations      Conversation[]
+  knowledgeDocuments KnowledgeDocument[]
+  googleAccount      GoogleAccount?
 
   @@map("users")
+}
+
+enum Channel {
+  WEB
+  WHATSAPP
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum AgentState {
+  WORKING
+  IDLE
+  NEEDS_HELP
+}
+
+/// Uma conversa de alguém com um agente, num canal.
+model Conversation {
+  id             String          @id @default(uuid()) @db.Uuid
+  agentId        String          @map("agent_id")
+  channel        Channel
+  userId         String?         @map("user_id") @db.Uuid
+  /// Quem fala, fora do sistema (ex.: o número do WhatsApp).
+  externalId     String?         @map("external_id")
+  /// O que aparece na lista de conversas (o início da primeira mensagem).
+  title          String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages       Message[]
+  pendingActions PendingAction[]
+
+  @@index([agentId, userId])
+  @@index([agentId, channel, externalId])
+  @@map("conversations")
+}
+
+/// Uma mensagem da conversa. `content` guarda os blocos tal como o modelo os devolveu.
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  seq            Int          @default(autoincrement())
+  role           MessageRole
+  content        Json
+  createdAt      DateTime     @default(now()) @map("created_at")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, seq])
+  @@map("messages")
+}
+
+/// O que um agente fez, no formato que o AI Office mostra (a `Entrada` de src/mapa/atividade.ts).
+model AgentEvent {
+  id        String     @id @default(uuid()) @db.Uuid
+  seq       Int        @unique @default(autoincrement())
+  /// O id do colaborador no AI Office.
+  agent     String
+  state     AgentState
+  type      String?
+  text      String
+  tool      String?
+  /// Os minutos que uma pessoa levaria (0 nos alertas e nos estados).
+  minutes   Int        @default(0)
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@map("agent_events")
+}
+
+/// Um ficheiro da base de conhecimento (o que a equipa pode perguntar ao chat).
+model KnowledgeDocument {
+  id           String           @id @default(uuid()) @db.Uuid
+  title        String
+  fileName     String           @map("file_name")
+  mimeType     String           @map("mime_type")
+  size         Int
+  chunkCount   Int              @map("chunk_count")
+  uploadedById String?          @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at")
+  uploadedBy   User?            @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  chunks       KnowledgeChunk[]
+
+  @@map("knowledge_documents")
+}
+
+/// Um pedaço de um ficheiro, com o seu vetor (pgvector) para a procura por sentido.
+model KnowledgeChunk {
+  id         String                      @id @default(uuid()) @db.Uuid
+  documentId String                      @map("document_id") @db.Uuid
+  position   Int
+  content    String
+  embedding  Unsupported("vector(1536)")
+  document   KnowledgeDocument           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, position])
+  @@map("knowledge_chunks")
+}
+
+/// O que o admin mudou num agente sem deploy (hoje, as instruções).
+model AgentSetting {
+  agentId   String   @id @map("agent_id")
+  prompt    String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("agent_settings")
+}
+
+/// A conta Google que um utilizador ligou (os agentes agem nela em nome dele).
+model GoogleAccount {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @unique @map("user_id") @db.Uuid
+  email                 String
+  /// O refresh token, cifrado (AES-256-GCM, chave em ENCRYPTION_KEY).
+  refreshTokenEncrypted String   @map("refresh_token_encrypted")
+  /// As permissões que a pessoa deu, separadas por espaços.
+  scopes                String
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_accounts")
+}
+
+enum PendingActionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+/// Uma ação que escreve no mundo (marcar, enviar, apagar), à espera do «sim» de quem pediu.
+model PendingAction {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @map("conversation_id") @db.Uuid
+  /// A vez (mensagem) em que foi proposta: só pode ser confirmada numa vez seguinte.
+  runId          String              @map("run_id")
+  toolName       String              @map("tool_name")
+  input          Json
+  /// O que foi mostrado a quem pediu.
+  description    String
+  status         PendingActionStatus @default(PENDING)
+  expiresAt      DateTime            @map("expires_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  resolvedAt     DateTime?           @map("resolved_at")
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, status])
+  @@map("pending_actions")
+}
+
+/// As mensagens do WhatsApp já recebidas, para não tratar a mesma duas vezes.
+model InboundMessage {
+  id         String   @id
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@map("inbound_messages")
 }
