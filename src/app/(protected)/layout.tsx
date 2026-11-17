@@ -14,10 +14,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <header className="topbar">
         <span className="brand">ElevateOne</span>
         <Link href="/dashboard">Dashboard</Link>
+        <Link href="/chat">Chat</Link>
+        <Link href="/integracoes">Integrações</Link>
         {user.role === "ADMIN" && <Link href="/admin">Admin</Link>}
-        <span className="who">
+        <Link className="who" href="/conta" title="A minha conta">
           {user.name} ({user.role})
-        </span>
+        </Link>
         <LogoutButton />
       </header>
       <main className="content">{children}</main>

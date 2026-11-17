@@ -10,6 +10,8 @@ export interface User {
   name: string;
   email: string;
   passwordHash: string;
+  /** O número de WhatsApp autorizado a falar com os agentes (só dígitos, com o indicativo). */
+  phone: string | null;
   role: Role;
   active: boolean;
   createdAt: Date;
@@ -34,4 +36,10 @@ export function toPublicUser(user: User): PublicUser {
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+/** Um número de telefone só com dígitos e com o indicativo do país, ou `null` se não for um. */
+export function normalizePhone(phone: string): string | null {
+  const digits = phone.replace(/\D/g, "").replace(/^00/, "");
+  return digits.length >= 8 && digits.length <= 15 ? digits : null;
 }

@@ -1,0 +1,8 @@
+# HTTPS automático (Let's Encrypt) para o domínio da app. O domínio tem de apontar para este servidor.
+{$APP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# As respostas do chat saem aos bocados: sem acumular.
+		flush_interval -1
+	}
+}
