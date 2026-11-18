@@ -21,8 +21,15 @@ export interface GoogleTokens {
 
 /** O Google já não aceita o refresh token (a pessoa tirou o acesso, ou expirou): é preciso ligar de novo. */
 export class GoogleReconnectError extends AppError {
-  constructor() {
-    super("A ligação ao Google expirou. É preciso ligar a conta de novo.", 409, "GOOGLE_RECONNECT");
+  /** Com o endereço da página das integrações, a mensagem diz onde se liga de novo. */
+  constructor(connectUrl?: string | null) {
+    super(
+      connectUrl
+        ? `A ligação ao Google expirou. Para ligar a conta de novo: abrir ${connectUrl} e escolher «Ligar conta Google».`
+        : "A ligação ao Google expirou. É preciso ligar a conta de novo.",
+      409,
+      "GOOGLE_RECONNECT",
+    );
   }
 }
 

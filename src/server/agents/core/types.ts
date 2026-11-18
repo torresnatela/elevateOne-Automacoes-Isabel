@@ -46,6 +46,9 @@ export interface ToolDefinition<Input = unknown> {
   office?: ToolOfficeInfo;
 }
 
+/** Quanto o modelo pensa antes de responder (e quanto gasta). */
+export type LlmEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
 /**
  * Um agente: uma automação. Para acrescentar uma: um ficheiro em
  * `src/server/agents/definitions/` com esta forma, registado no `AgentRegistry`.
@@ -58,6 +61,8 @@ export interface AgentDefinition {
   /** Os nomes das ferramentas que pode usar. */
   tools: readonly string[];
   channels: readonly Channel[];
+  /** O modelo deste agente. Sem isto, vale o do ambiente (`ANTHROPIC_MODEL`). */
+  llm?: { model: string; effort?: LlmEffort };
   office: {
     /** O id do colaborador no AI Office. */
     agentId: string;
@@ -86,6 +91,9 @@ export interface LlmRequest {
   system: string;
   messages: LlmMessage[];
   tools: LlmTool[];
+  /** O modelo e o esforço que o agente fixou. Sem eles, valem os do cliente. */
+  model?: string;
+  effort?: LlmEffort;
   /** Com isto, o texto chega aos bocados, à medida que o modelo escreve. */
   onText?: (delta: string) => void;
 }
@@ -99,4 +107,14 @@ export interface LlmResponse {
 /** O modelo de linguagem. O núcleo depende desta interface, não do fornecedor. */
 export interface LlmClient {
   respond(request: LlmRequest): Promise<LlmResponse>;
+}
+
+/**
+ * Onde ficam os ficheiros que o modelo lê (imagens, PDFs). Enviam-se uma vez e a conversa
+ * guarda só a referência: os bytes não vão para o banco nem voltam a ser enviados a cada volta.
+ */
+export interface LlmFileStore {
+  /** Envia o ficheiro e devolve o id com que os blocos de conteúdo o referem. */
+  upload(file: { data: Uint8Array; mimeType: string; fileName: string }): Promise<string>;
+  delete(fileId: string): Promise<void>;
 }

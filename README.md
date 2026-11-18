@@ -94,6 +94,11 @@ Cada automação é um **agente** com as suas **ferramentas**, registado em
 | `assistente-interno` | `/chat`  | Tira as dúvidas da equipa com a base de conhecimento do escritório              |
 | `assistente-isabel`  | WhatsApp | Trata da agenda, do email, dos contactos e dos documentos, por texto ou por voz |
 
+O assistente do WhatsApp é pessoal e serve toda a equipa: quem tem número em `/admin/whatsapp`
+fala com ele, e ele age na conta Google que essa pessoa ligou em `/integracoes` (e só nessa). O id
+`assistente-isabel` vem de quando servia uma só pessoa; mantém-se porque é a chave das conversas
+gravadas e do AI Office. Corre em `claude-haiku-5-5`; o chat interno usa o `ANTHROPIC_MODEL`.
+
 ```
 src/server/
   agents/
@@ -127,7 +132,7 @@ pessoa.
 
 | Variável                                                                | Para quê                                         |
 | ----------------------------------------------------------------------- | ------------------------------------------------ |
-| `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`)             | O modelo dos agentes (Claude)                    |
+| `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`)             | O modelo dos agentes (Claude). Um agente pode fixar o seu em `llm`: o do WhatsApp usa o Haiku |
 | `OPENAI_API_KEY`                                                        | Embeddings da base de conhecimento e transcrição |
 | `APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ENCRYPTION_KEY` | Ligação ao Google                                |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`          | WhatsApp (Evolution API)                         |
@@ -137,8 +142,11 @@ pessoa.
 Sem uma destas, a parte que depende dela responde com um erro que diz o que falta; o resto
 funciona.
 
-**Google.** No Google Cloud: ative as APIs Calendar, Gmail, People, Drive e Docs e crie
+**Google.** No Google Cloud: ative as APIs Calendar, Gmail, People, Drive, Docs e Sheets e crie
 credenciais OAuth de «Aplicação Web» com o URI de redirecionamento `<APP_URL>/api/google/callback`.
+No ecrã de consentimento, junte as permissões que a app pede (a lista está em `GOOGLE_SCOPES`, em
+`src/server/integrations/google/workspace.ts`). Quando essa lista ganha uma permissão, quem já
+tinha a conta ligada vê em `/integracoes` o que falta e o botão «Dar as permissões».
 Com uma conta Workspace, marque a app como «Interna». Com uma conta @gmail.com, o acesso expira a
 cada 7 dias enquanto a app estiver em modo de teste.
 
@@ -146,7 +154,9 @@ cada 7 dias enquanto a app estiver em modo de teste.
 instância com o nome de `EVOLUTION_INSTANCE`, leia o QR code com o telemóvel do número do agente
 (um número dedicado: a ligação não é oficial e a Meta pode bloqueá-lo) e aponte o webhook dela
 para `<APP_URL>/api/webhooks/whatsapp`, com o evento `MESSAGES_UPSERT` e o cabeçalho
-`x-webhook-secret`. Depois, dê a cada pessoa o seu número em `/admin/whatsapp`.
+`x-webhook-secret` (e sem `base64`: a app vai buscar os ficheiros só quando os vai ler). Depois,
+dê a cada pessoa o seu número em `/admin/whatsapp`. O assistente lê texto, mensagens de voz,
+imagens e documentos (PDF, Word, texto).
 
 ### AI Office
 

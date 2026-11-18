@@ -63,7 +63,11 @@ export class FakeConversationRepository implements ConversationRepository {
         .filter(
           (c) => c.agentId === agentId && c.channel === channel && c.externalId === externalId,
         )
-        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0] ?? null
+        .sort(
+          (a, b) =>
+            b.updatedAt.getTime() - a.updatedAt.getTime() ||
+            b.createdAt.getTime() - a.createdAt.getTime(),
+        )[0] ?? null
     );
   }
 

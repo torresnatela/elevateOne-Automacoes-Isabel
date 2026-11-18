@@ -66,6 +66,8 @@ export interface RunInput {
   text: string;
   /** O que o agente precisa de saber nesta vez e não vem na mensagem (a data e a hora de agora). */
   context?: string;
+  /** O que veio com a mensagem (uma imagem, um documento), já em blocos que o modelo lê. */
+  attachments?: ContentBlock[];
   /** Para mostrar a resposta a aparecer: cada bocado de texto que o modelo escreve. */
   onText?: (delta: string) => void;
   /** Para mostrar o que o agente está a fazer: chamado quando começa a usar uma ferramenta. */
@@ -164,6 +166,8 @@ export class AgentRunner {
 
     await push("user", [
       ...(input.context ? [textBlock(input.context)] : []),
+      // Os anexos antes do pedido: o modelo lê primeiro o documento e depois o que se quer dele.
+      ...(input.attachments ?? []),
       textBlock(input.text),
     ]);
     await say({ state: "WORKING", text: agent.office.workingText });
@@ -219,6 +223,8 @@ export class AgentRunner {
         system,
         messages,
         tools: llmTools,
+        model: agent.llm?.model,
+        effort: agent.llm?.effort,
         onText: hooks.onText,
       });
 
@@ -277,12 +283,16 @@ export class AgentRunner {
       }
       return succeeded(use, output);
     } catch (error) {
-      await turn.say({
-        state: "NEEDS_HELP",
-        type: "alerta",
-        text: `Falhou: ${tool.name}`,
-        tool: tool.office?.tool ?? null,
-      });
+      // Um erro que a própria pessoa resolve (ligar a conta, dar uma permissão) não é uma avaria:
+      // o modelo explica-lho, e o escritório não é chamado.
+      const fixable = error instanceof AppError && error.status < 500;
+      if (!fixable)
+        await turn.say({
+          state: "NEEDS_HELP",
+          type: "alerta",
+          text: `Falhou: ${tool.name}`,
+          tool: tool.office?.tool ?? null,
+        });
       return failed(use, error instanceof Error ? error.message : "A ferramenta falhou.");
     }
   }

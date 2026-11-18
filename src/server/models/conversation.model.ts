@@ -44,6 +44,26 @@ export const isToolUseBlock = (b: ContentBlock): b is ToolUseBlock =>
 
 export const textBlock = (text: string): TextBlock => ({ type: "text", text });
 
+/** Uma imagem que o modelo vê, pela referência do ficheiro enviado. */
+export const imageFileBlock = (fileId: string): ContentBlock => ({
+  type: "image",
+  source: { type: "file", file_id: fileId },
+});
+
+/** Um PDF que o modelo lê, pela referência do ficheiro enviado. */
+export const documentFileBlock = (fileId: string, title: string): ContentBlock => ({
+  type: "document",
+  source: { type: "file", file_id: fileId },
+  title,
+});
+
+/** Os ficheiros a que os blocos de uma mensagem se referem. */
+export const fileIdsOf = (content: readonly ContentBlock[]): string[] =>
+  content.flatMap((block) => {
+    const source = block.source as { type?: unknown; file_id?: unknown } | undefined;
+    return source?.type === "file" && typeof source.file_id === "string" ? [source.file_id] : [];
+  });
+
 /** O texto de uma mensagem: os blocos de texto, juntos. */
 export const textOf = (content: readonly ContentBlock[]): string =>
   content

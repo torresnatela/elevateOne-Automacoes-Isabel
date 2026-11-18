@@ -38,6 +38,7 @@ describe("GoogleService", () => {
     const status = await t.service.connect("u1", "good-code");
 
     expect(status.missingScopes).toContain("https://www.googleapis.com/auth/gmail.send");
+    expect(status.missingScopes).toContain("https://www.googleapis.com/auth/spreadsheets");
     expect(status.missingScopes).not.toContain("https://www.googleapis.com/auth/calendar.events");
     expect(status.missingScopes).not.toContain("openid");
   });
@@ -90,6 +91,70 @@ describe("GoogleService", () => {
     await expect(t.service.workspaceFor(null)).rejects.toMatchObject({
       code: "GOOGLE_NOT_CONNECTED",
     });
+  });
+
+  it("o erro de conta por ligar leva o endereço onde se liga", async () => {
+    const service = new GoogleService(
+      new FakeGoogleAccountRepository(),
+      new FakeGoogleOAuth(),
+      () => key,
+      undefined,
+      undefined,
+      () => "https://app.escritorio.pt/integracoes",
+    );
+
+    await expect(service.workspaceFor("u1")).rejects.toThrow(
+      "https://app.escritorio.pt/integracoes",
+    );
+  });
+
+  it("quando o acesso expira, o erro leva o endereço onde se liga de novo", async () => {
+    const accounts = new FakeGoogleAccountRepository();
+    const oauth = new FakeGoogleOAuth();
+    const clock = { now: 1_000_000 };
+    const service = new GoogleService(
+      accounts,
+      oauth,
+      () => key,
+      () => clock.now,
+      undefined,
+      () => "https://app.escritorio.pt/integracoes",
+    );
+    await service.connect("u1", "good-code");
+    oauth.valid.clear();
+    clock.now += 4_000_000;
+
+    await expect(service.accessToken("u1")).rejects.toMatchObject({
+      code: "GOOGLE_RECONNECT",
+      message: expect.stringContaining("https://app.escritorio.pt/integracoes"),
+    });
+  });
+
+  it("as ferramentas recebem um acesso que sabe dizer onde se dão as permissões", async () => {
+    const denied = (async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "Request had insufficient authentication scopes.",
+            status: "PERMISSION_DENIED",
+          },
+        }),
+        { status: 403 },
+      )) as typeof fetch;
+    const service = new GoogleService(
+      new FakeGoogleAccountRepository(),
+      new FakeGoogleOAuth(),
+      () => key,
+      undefined,
+      denied,
+      () => "https://app.escritorio.pt/integracoes",
+    );
+    await service.connect("u1", "good-code");
+
+    const workspace = await service.workspaceFor("u1");
+    await expect(workspace.readCells("s1", "A1")).rejects.toThrow(
+      "https://app.escritorio.pt/integracoes",
+    );
   });
 
   it("desligar tira o acesso do lado do Google e apaga a conta", async () => {
