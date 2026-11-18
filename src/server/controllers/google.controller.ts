@@ -19,10 +19,16 @@ const sameState = (a: string, b: string) =>
 export class GoogleController {
   constructor(private readonly google: GoogleService) {}
 
-  private back(req: NextRequest, result: string) {
-    const url = new URL(RESULT_PATH, req.nextUrl.origin);
-    url.searchParams.set("google", result);
-    const res = NextResponse.redirect(url);
+  /**
+   * De volta às integrações, por um endereço relativo: atrás de um proxy (o Caddy, um túnel)
+   * o servidor vê o seu endereço interno, e mandava a pessoa para lá. O navegador resolve-o
+   * contra o endereço em que está.
+   */
+  private back(result: string) {
+    const res = new NextResponse(null, {
+      status: 307,
+      headers: { location: `${RESULT_PATH}?google=${encodeURIComponent(result)}` },
+    });
     res.cookies.set(GOOGLE_STATE_COOKIE, "", { path: "/", maxAge: 0 });
     return res;
   }
@@ -43,7 +49,7 @@ export class GoogleController {
       return res;
     } catch (err) {
       if (err instanceof AppError && err.code === "GOOGLE_NOT_CONFIGURED")
-        return this.back(req, "por-configurar");
+        return this.back("por-configurar");
       return handleError(err);
     }
   }
@@ -53,20 +59,20 @@ export class GoogleController {
     try {
       const session = await requireSession(req);
       const params = req.nextUrl.searchParams;
-      if (params.get("error")) return this.back(req, "recusado");
+      if (params.get("error")) return this.back("recusado");
 
       const state = params.get("state") ?? "";
       const expected = req.cookies.get(GOOGLE_STATE_COOKIE)?.value ?? "";
       const code = params.get("code");
-      if (!code || !expected || !sameState(state, expected)) return this.back(req, "erro");
+      if (!code || !expected || !sameState(state, expected)) return this.back("erro");
 
       await this.google.connect(session.userId, code);
-      return this.back(req, "ligado");
+      return this.back("ligado");
     } catch (err) {
       if (err instanceof AppError && (err.status === 401 || err.status === 403))
         return handleError(err);
       if (!(err instanceof AppError)) console.error(err);
-      return this.back(req, "erro");
+      return this.back("erro");
     }
   }
 

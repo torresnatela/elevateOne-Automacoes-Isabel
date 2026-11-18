@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { LlmClient, LlmEffort, LlmRequest, LlmResponse } from "@/server/agents/core/types";
 import { AppError } from "@/server/lib/errors";
 import type { ContentBlock } from "@/server/models/conversation.model";
+import { anthropicClientOptions } from "./anthropic-client";
 
 type CreateParams = Anthropic.Beta.Messages.MessageCreateParamsNonStreaming;
 type Effort = LlmEffort;
@@ -56,7 +57,7 @@ export class AnthropicLlmClient implements LlmClient {
     return new AnthropicLlmClient(
       {
         create: (params, onText) => {
-          client ??= new Anthropic();
+          client ??= new Anthropic(anthropicClientOptions(env));
           if (!onText) return client.beta.messages.create(params);
           return client.beta.messages.stream(params).on("text", onText).finalMessage();
         },

@@ -1,5 +1,6 @@
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import type { LlmFileStore } from "@/server/agents/core/types";
+import { anthropicClientOptions } from "./anthropic-client";
 
 type UploadedFile = { data: Uint8Array; mimeType: string; fileName: string };
 
@@ -21,18 +22,18 @@ export class AnthropicFileStore implements LlmFileStore {
   constructor(private readonly api: AnthropicFilesApi) {}
 
   /** Com as credenciais do ambiente (`ANTHROPIC_API_KEY`), lidas só no primeiro pedido. */
-  static fromEnv(): AnthropicFileStore {
+  static fromEnv(env: NodeJS.ProcessEnv = process.env): AnthropicFileStore {
     let client: Anthropic | undefined;
     return new AnthropicFileStore({
       upload: async (file, expiresInSeconds) => {
-        client ??= new Anthropic();
+        client ??= new Anthropic(anthropicClientOptions(env));
         return client.files.upload({
           file: await toFile(file.data, file.fileName, { type: file.mimeType }),
           expires_in_seconds: expiresInSeconds,
         });
       },
       delete: (fileId) => {
-        client ??= new Anthropic();
+        client ??= new Anthropic(anthropicClientOptions(env));
         return client.files.delete(fileId);
       },
     });

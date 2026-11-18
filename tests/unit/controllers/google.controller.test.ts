@@ -32,7 +32,8 @@ function setup() {
   return { accounts, oauth, controller };
 }
 
-const locationOf = (res: Response) => new URL(res.headers.get("location")!);
+// O retorno às integrações é relativo; o endereço do Google é absoluto. Lê-se dos dois modos.
+const locationOf = (res: Response) => new URL(res.headers.get("location")!, "http://base.test");
 
 describe("GoogleController", () => {
   beforeEach(() => vi.spyOn(console, "error").mockImplementation(() => {}));
@@ -73,6 +74,16 @@ describe("GoogleController", () => {
     expect(locationOf(res).pathname + locationOf(res).search).toBe("/integracoes?google=ligado");
     expect(accounts.accounts.get("u1")?.email).toBe("isabel@escritorio.pt");
     expect(res.cookies.get(GOOGLE_STATE_COOKIE)?.maxAge).toBe(0);
+  });
+
+  it("volta por um endereço relativo: atrás de um proxy, o servidor não sabe o seu endereço público", async () => {
+    const { controller } = setup();
+    const res = await controller.callback(
+      await request("/api/google/callback?code=good-code&state=s1", { state: "s1" }),
+    );
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("/integracoes?google=ligado");
   });
 
   it("não liga com o state errado, sem cookie ou sem código", async () => {

@@ -43,3 +43,16 @@ export function normalizePhone(phone: string): string | null {
   const digits = phone.replace(/\D/g, "").replace(/^00/, "");
   return digits.length >= 8 && digits.length <= 15 ? digits : null;
 }
+
+/**
+ * As formas em que o mesmo número pode aparecer. No Brasil, os telemóveis ganharam um 9 a
+ * seguir ao DDD, mas o WhatsApp continua a identificar muitos deles sem esse 9: quem se
+ * regista com o número que marca tem de ser reconhecido com o que o WhatsApp entrega.
+ */
+export function phoneVariants(phone: string): string[] {
+  const withNine = /^55(\d{2})9(\d{8})$/.exec(phone);
+  if (withNine) return [phone, `55${withNine[1]}${withNine[2]}`];
+  const withoutNine = /^55(\d{2})([6-9]\d{7})$/.exec(phone);
+  if (withoutNine) return [phone, `55${withoutNine[1]}9${withoutNine[2]}`];
+  return [phone];
+}

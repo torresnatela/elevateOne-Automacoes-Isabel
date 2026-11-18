@@ -147,6 +147,41 @@ describe("WhatsappService", () => {
     expect(note.match(/[\[\]]/g)).toEqual(["[", "]"]);
   });
 
+  describe("números do Brasil, que o WhatsApp entrega com ou sem o 9 a seguir ao DDD", () => {
+    const from = (phone: string) =>
+      webhook({ conversation: "olá" }, { id: "B1", remoteJid: `${phone}@s.whatsapp.net` });
+
+    it("registado com o 9, responde a quem chega sem ele, para o número como chegou", async () => {
+      const t = await setup([says("Olá, Bia.")]);
+      const bia = await t.users.create({ name: "Bia", email: "b@e.pt", passwordHash: "h" });
+      await t.users.setPhone(bia.id, "5531987650214");
+
+      await expect(t.service.handle(from("553187650214"))).resolves.toBe("replied");
+
+      expect(t.messenger.sent).toEqual([{ phone: "553187650214", text: "Olá, Bia." }]);
+      expect(t.conversations.conversations[0].userId).toBe(bia.id);
+    });
+
+    it("registado sem o 9, responde a quem chega com ele", async () => {
+      const t = await setup([says("Olá, Bia.")]);
+      const bia = await t.users.create({ name: "Bia", email: "b@e.pt", passwordHash: "h" });
+      await t.users.setPhone(bia.id, "553187650214");
+
+      await expect(t.service.handle(from("5531987650214"))).resolves.toBe("replied");
+    });
+
+    it("um número de outro país só vale tal como foi registado", async () => {
+      const t = await setup([says("nunca")]);
+
+      await expect(t.service.handle(from("3519912345678"))).resolves.toBe("unauthorized");
+      await expect(
+        t.service.handle(
+          webhook({ conversation: "olá" }, { id: "B2", remoteJid: "35191234567@s.whatsapp.net" }),
+        ),
+      ).resolves.toBe("unauthorized");
+    });
+  });
+
   it("cada número fala na sua conversa, e as ferramentas agem por quem escreveu", async () => {
     const t = await setup([
       says("Olá, Isabel."),
