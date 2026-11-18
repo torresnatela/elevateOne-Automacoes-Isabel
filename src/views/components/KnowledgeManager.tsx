@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { Icon } from "@/views/components/Icon";
 
 export interface KnowledgeDocumentView {
   id: string;
@@ -34,6 +35,8 @@ export function KnowledgeManager({
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  /** O nome do ficheiro escolhido, para o mostrar no lugar do convite. */
+  const [chosen, setChosen] = useState<string | null>(null);
   const form = useRef<HTMLFormElement>(null);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -52,6 +55,7 @@ export function KnowledgeManager({
       const { document } = await res.json();
       setDocuments((list) => [document, ...list]);
       form.current?.reset();
+      setChosen(null);
     } catch {
       setError("Não foi possível ligar ao servidor. Tente novamente.");
     } finally {
@@ -78,62 +82,115 @@ export function KnowledgeManager({
   }
 
   return (
-    <div className="stack">
-      <form ref={form} className="panel form" onSubmit={onSubmit}>
-        <label htmlFor="file">Ficheiro (PDF, DOCX, TXT ou MD, até 25 MB)</label>
-        <input id="file" name="file" type="file" accept=".pdf,.docx,.txt,.md" required />
+    <>
+      <form ref={form} className="cartao formulario" onSubmit={onSubmit}>
+        <div className="colunas" style={{ alignItems: "flex-end" }}>
+          <div className="campo largo">
+            <label className="campo-rotulo" htmlFor="file">
+              Ficheiro
+            </label>
+            <input
+              className="so-leitor"
+              id="file"
+              name="file"
+              type="file"
+              accept=".pdf,.docx,.txt,.md"
+              required
+              onChange={(e) => setChosen(e.target.files?.[0]?.name ?? null)}
+            />
+            <label className="largar" htmlFor="file">
+              <span className="ladrilho" aria-hidden="true">
+                <Icon name="carregar" />
+              </span>
+              <span className="largar-textos">
+                <span className="largar-nome">{chosen ?? "Escolher um ficheiro"}</span>
+                <span className="ajuda">PDF, DOCX, TXT ou MD, até 25 MB</span>
+              </span>
+            </label>
+          </div>
 
-        <label htmlFor="title">Título (opcional)</label>
-        <input id="title" name="title" type="text" placeholder="O nome que a equipa vê" />
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="title">
+              Título (opcional)
+            </label>
+            <input
+              className="entrada"
+              id="title"
+              name="title"
+              type="text"
+              placeholder="O nome que a equipa vê"
+              style={{ height: 64 }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="botao primario grande"
+            disabled={sending}
+            style={{ flex: "0 0 auto", height: 64, paddingInline: 24 }}
+          >
+            {sending ? "A enviar e a ler o ficheiro…" : "Enviar"}
+          </button>
+        </div>
 
         {error && (
-          <p role="alert" className="error">
+          <p role="alert" className="mensagem erro">
             {error}
           </p>
         )}
-        <button type="submit" disabled={sending}>
-          {sending ? "A enviar e a ler o ficheiro…" : "Enviar"}
-        </button>
       </form>
 
       {documents.length === 0 ? (
-        <p className="muted">Ainda não há ficheiros. O chat só responde com o que estiver aqui.</p>
+        <div className="cartao">
+          <div className="vazio">
+            <span className="ladrilho" aria-hidden="true">
+              <Icon name="livro" />
+            </span>
+            <p className="vazio-titulo">A base está vazia</p>
+            <p>Ainda não há ficheiros. O chat só responde com o que estiver aqui.</p>
+          </div>
+        </div>
       ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Título</th>
-              <th>Ficheiro</th>
-              <th>Tamanho</th>
-              <th>Pedaços</th>
-              <th>Enviado</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map((doc) => (
-              <tr key={doc.id}>
-                <td>{doc.title}</td>
-                <td className="muted">{doc.fileName}</td>
-                <td>{formatSize(doc.size)}</td>
-                <td>{doc.chunkCount}</td>
-                <td>{formatDate(doc.createdAt)}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="link danger"
-                    disabled={removing === doc.id}
-                    onClick={() => remove(doc)}
-                    aria-label={`Apagar ${doc.title}`}
-                  >
-                    {removing === doc.id ? "A apagar…" : "Apagar"}
-                  </button>
-                </td>
+        <div className="moldura-tabela">
+          <table className="tabela">
+            <thead>
+              <tr>
+                <th>Título</th>
+                <th>Ficheiro</th>
+                <th>Tamanho</th>
+                <th>Pedaços</th>
+                <th>Enviado</th>
+                <th>
+                  <span className="so-leitor">Ações</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {documents.map((doc) => (
+                <tr key={doc.id}>
+                  <td className="forte">{doc.title}</td>
+                  <td>{doc.fileName}</td>
+                  <td className="num">{formatSize(doc.size)}</td>
+                  <td className="num">{doc.chunkCount}</td>
+                  <td className="num">{formatDate(doc.createdAt)}</td>
+                  <td className="acoes">
+                    <button
+                      type="button"
+                      className="botao fantasma perigo so-icone"
+                      disabled={removing === doc.id}
+                      onClick={() => remove(doc)}
+                      aria-label={`Apagar ${doc.title}`}
+                      title="Apagar"
+                    >
+                      <Icon name="apagar" small />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
-    </div>
+    </>
   );
 }

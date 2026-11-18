@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/views/components/Icon";
 
 export interface AgentPromptView {
   id: string;
@@ -51,24 +52,39 @@ export function AgentPromptEditor({ agent }: { agent: AgentPromptView }) {
   }
 
   return (
-    <div className="panel form">
-      <label htmlFor={`prompt-${agent.id}`}>
-        {agent.name} {customized && <span className="muted">(alteradas)</span>}
-      </label>
+    <div className="cartao formulario">
+      <div className="cartao-cabeca">
+        <label className="cartao-titulo" htmlFor={`prompt-${agent.id}`} style={{ flex: 1 }}>
+          {agent.name}
+        </label>
+        {customized ? (
+          <span className="estado aviso">
+            <span className="ponto" />
+            <span>Alteradas</span>
+          </span>
+        ) : (
+          <span className="selo">De origem</span>
+        )}
+      </div>
       <textarea
+        className="entrada"
         id={`prompt-${agent.id}`}
         rows={12}
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
       {status && (
-        <p role={status.error ? "alert" : "status"} className={status.error ? "error" : "muted"}>
+        <p
+          role={status.error ? "alert" : "status"}
+          className={status.error ? "mensagem erro" : "mensagem sucesso"}
+        >
           {status.text}
         </p>
       )}
-      <div className="row">
+      <div className="linha">
         <button
           type="button"
+          className="botao primario"
           disabled={busy || !text.trim() || text === saved}
           onClick={() => call("PUT", text.trim())}
         >
@@ -77,10 +93,11 @@ export function AgentPromptEditor({ agent }: { agent: AgentPromptView }) {
         {customized && (
           <button
             type="button"
-            className="link"
+            className="botao fantasma"
             disabled={busy}
             onClick={() => call("DELETE", agent.defaultPrompt)}
           >
+            <Icon name="repor" small />
             Repor as de origem
           </button>
         )}

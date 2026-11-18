@@ -13,18 +13,18 @@ export default async function WhatsappPage() {
 
   const users = await userAdminService.list();
   return (
-    <section className="stack">
-      <div>
-        <h1>WhatsApp</h1>
-        <p className="muted">
+    <div className="pagina estreita">
+      <header className="pagina-cabeca">
+        <h1 className="titulo">WhatsApp</h1>
+        <p className="descricao">
           O assistente só responde aos números desta lista. Cada pessoa fala com ele a partir do seu
           número, e ele age na conta Google que essa pessoa ligou em Integrações. A quem não está
           aqui, não responde.
         </p>
-      </div>
+      </header>
       <WhatsappNumbers
         users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, phone: u.phone }))}
       />
-    </section>
+    </div>
   );
 }

@@ -21,6 +21,8 @@ ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 RUN groupadd --system app && useradd --system --gid app app
 COPY --from=builder --chown=app:app /app/.next/standalone ./
 COPY --from=builder --chown=app:app /app/.next/static ./.next/static
+# (o logótipo: o build autónomo não leva a pasta public)
+COPY --from=builder --chown=app:app /app/public ./public
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

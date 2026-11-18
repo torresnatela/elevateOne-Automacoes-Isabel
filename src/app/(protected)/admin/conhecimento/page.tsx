@@ -18,14 +18,14 @@ export default async function KnowledgePage() {
   ]);
 
   return (
-    <section className="stack">
-      <div>
-        <h1>Base de conhecimento</h1>
-        <p className="muted">
+    <div className="pagina">
+      <header className="pagina-cabeca">
+        <h1 className="titulo">Base de conhecimento</h1>
+        <p className="descricao">
           Os ficheiros que o chat interno usa para responder à equipa. Um PDF digitalizado, sem
           texto, não pode ser lido.
         </p>
-      </div>
+      </header>
       <KnowledgeManager
         initialDocuments={documents.map((d) => ({
           id: d.id,
@@ -37,17 +37,21 @@ export default async function KnowledgePage() {
         }))}
       />
 
-      <div>
-        <h2>Instruções dos agentes</h2>
-        <p className="muted">
+      <header className="pagina-cabeca" style={{ paddingTop: 16 }}>
+        <h2 className="subtitulo">Instruções dos agentes</h2>
+        <p className="descricao">
           Como cada agente se deve comportar. As mudanças valem na mensagem seguinte.
         </p>
-      </div>
+      </header>
       {agents.length === 0 ? (
-        <p className="muted">Ainda não há agentes.</p>
+        <p className="mensagem nota">Ainda não há agentes.</p>
       ) : (
-        agents.map((agent) => <AgentPromptEditor key={agent.id} agent={agent} />)
+        <div className="colunas">
+          {agents.map((agent) => (
+            <AgentPromptEditor key={agent.id} agent={agent} />
+          ))}
+        </div>
       )}
-    </section>
+    </div>
   );
 }
