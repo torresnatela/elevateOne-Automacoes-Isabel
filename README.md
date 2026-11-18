@@ -130,14 +130,15 @@ pessoa.
 
 ### Configuração (`.env`)
 
-| Variável                                                                | Para quê                                         |
-| ----------------------------------------------------------------------- | ------------------------------------------------ |
+| Variável                                                                | Para quê                                                                                      |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`)             | O modelo dos agentes (Claude). Um agente pode fixar o seu em `llm`: o do WhatsApp usa o Haiku |
-| `OPENAI_API_KEY`                                                        | Embeddings da base de conhecimento e transcrição |
-| `APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ENCRYPTION_KEY` | Ligação ao Google                                |
-| `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`          | WhatsApp (Evolution API)                         |
-| `WHATSAPP_WEBHOOK_SECRET`                                               | O segredo que o webhook do WhatsApp exige        |
-| `OFFICE_API_TOKEN`                                                      | O token com que o AI Office lê os eventos        |
+| `ANTHROPIC_WORKSPACE_ID`                                                | Opcional: o id do workspace, para uma chave da Anthropic que não está ligada a nenhum         |
+| `OPENAI_API_KEY`                                                        | Embeddings da base de conhecimento e transcrição                                              |
+| `APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ENCRYPTION_KEY` | Ligação ao Google                                                                             |
+| `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`          | WhatsApp (Evolution API)                                                                      |
+| `WHATSAPP_WEBHOOK_SECRET`                                               | O segredo que o webhook do WhatsApp exige                                                     |
+| `OFFICE_API_TOKEN`                                                      | O token com que o AI Office lê os eventos                                                     |
 
 Sem uma destas, a parte que depende dela responde com um erro que diz o que falta; o resto
 funciona.

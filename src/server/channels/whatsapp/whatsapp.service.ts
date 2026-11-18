@@ -7,6 +7,7 @@ import { AppError } from "@/server/lib/errors";
 import { KeyedQueue } from "@/server/lib/keyed-queue";
 import { cutPoint } from "@/server/lib/text";
 import { describeDateTime } from "@/server/lib/time";
+import { phoneVariants } from "@/server/models/user.model";
 import {
   documentFileBlock,
   fileIdsOf,
@@ -98,7 +99,7 @@ export class WhatsappService {
     if (!incoming) return "ignored";
     if (!(await this.deps.inbound.claim(incoming.id))) return "duplicate";
 
-    const user = await this.deps.users.findByPhone(incoming.phone);
+    const user = await this.userOf(incoming.phone);
     if (!user || !user.active) {
       // Sem resposta: um desconhecido não fica a saber que há aqui um agente.
       this.deps.log?.(
@@ -108,6 +109,15 @@ export class WhatsappService {
     }
     // Uma mensagem de cada vez por pessoa: duas respostas a correr ao mesmo tempo baralhavam a conversa.
     return this.queue.run(incoming.phone, () => this.answer(incoming, user));
+  }
+
+  /** O utilizador de um número, em qualquer das formas em que o WhatsApp o pode entregar. */
+  private async userOf(phone: string) {
+    for (const variant of phoneVariants(phone)) {
+      const user = await this.deps.users.findByPhone(variant);
+      if (user) return user;
+    }
+    return null;
   }
 
   private async answer(
