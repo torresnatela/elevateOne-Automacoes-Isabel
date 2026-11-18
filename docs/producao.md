@@ -58,8 +58,13 @@ curl -X POST http://localhost:8080/instance/create \
 # 3. Apontar o webhook para a app, por dentro da rede do Docker
 curl -X POST http://localhost:8080/webhook/set/$EVOLUTION_INSTANCE \
   -H "apikey: $EVOLUTION_API_KEY" -H "content-type: application/json" \
-  -d '{"webhook":{"enabled":true,"url":"http://app:3000/api/webhooks/whatsapp","events":["MESSAGES_UPSERT"],"base64":true,"headers":{"x-webhook-secret":"'"$WHATSAPP_WEBHOOK_SECRET"'"}}}'
+  -d '{"webhook":{"enabled":true,"url":"http://app:3000/api/webhooks/whatsapp","events":["MESSAGES_UPSERT"],"base64":false,"headers":{"x-webhook-secret":"'"$WHATSAPP_WEBHOOK_SECRET"'"}}}'
 ```
+
+O `"base64":false` é de propósito: com `true`, a Evolution mandava cada foto e cada documento
+inteiros no corpo do webhook. Assim a app vê primeiro o tipo e o tamanho, e só vai buscar o
+ficheiro se o for ler (imagens até 5 MB, documentos até 15 MB). Numa instalação anterior, repita
+este passo para mudar o webhook.
 
 Por fim, em `/admin/whatsapp`, dê a cada pessoa o seu número; e cada pessoa liga a sua conta
 Google em `/integracoes`.
@@ -72,6 +77,17 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --bui
 ```
 
 As migrations novas correm sozinhas antes de a app nova arrancar.
+
+**Folhas de cálculo.** A versão com Google Sheets pede uma permissão nova. Antes de atualizar,
+ative a *Google Sheets API* no projeto do Google Cloud e junte `.../auth/spreadsheets` ao ecrã de
+consentimento. Depois de atualizar, cada pessoa abre `/integracoes` e escolhe «Dar as permissões»;
+até lá, o assistente responde-lhe com esse endereço quando lhe pedirem uma folha de cálculo.
+
+**Instruções gravadas pelo admin.** As instruções de um agente editadas em `/admin/conhecimento`
+valem mais do que as do código, e uma atualização não lhes mexe. Depois de atualizar para a versão
+em que o assistente do WhatsApp passou a servir toda a equipa, abra essa página: se as instruções
+do «Assistente pessoal» aparecerem como alteradas, ainda são as antigas, escritas para uma só
+pessoa. Reveja-as ou escolha «Repor as de origem».
 
 ## Cópias de segurança
 
@@ -100,7 +116,12 @@ ela, as contas Google têm de ser ligadas de novo.
 - **O WhatsApp não é oficial.** A Meta pode desligar ou bloquear o número. Se o agente deixar de
   responder, veja primeiro o estado da instância em `http://localhost:8080/manager`.
 - **Dados de clientes saem do servidor**: o texto das conversas vai para a Anthropic, e os
-  ficheiros da base de conhecimento e os áudios vão para a OpenAI. Convém isso constar da
+  ficheiros da base de conhecimento e os áudios vão para a OpenAI. As fotografias e os PDFs
+  enviados pelo WhatsApp ficam guardados na Anthropic enquanto a conversa dura: a app apaga-os
+  quando a pessoa começa a conversa seguinte, e envia-os com uma validade de 48 horas para os
+  que ficarem para trás (a validade tira o acesso ao conteúdo; os registos do ficheiro podem
+  ficar visíveis na conta mais algum tempo). Seguem com um nome neutro (`documento.pdf`), não com
+  o que a pessoa lhes deu. No banco fica só a referência, não o ficheiro. Convém isso constar da
   política de privacidade do escritório (RGPD).
 - **Desativar um utilizador** tira-lhe logo o acesso às páginas, mas a sessão que ele já tinha
   aberta continua a valer nas chamadas à API até expirar (8 horas, no máximo).

@@ -18,6 +18,7 @@ const SCOPE_LABELS: Record<string, string> = {
   "contacts.other.readonly": "procurar nas pessoas com quem trocou emails",
   "drive.readonly": "procurar no Drive",
   "drive.file": "criar documentos",
+  spreadsheets: "ler e escrever em folhas de cálculo",
 };
 
 const RESULTS: Record<string, { error: boolean; text: string }> = {
@@ -71,8 +72,8 @@ export function GoogleConnection({
       <div>
         <h2>Google</h2>
         <p className="muted">
-          Agenda, Gmail, Contactos e Drive. Os agentes agem nesta conta em seu nome, e pedem sempre
-          confirmação antes de marcar, enviar ou criar alguma coisa.
+          Agenda, Gmail, Contactos, Drive e folhas de cálculo. Os agentes agem nesta conta em seu
+          nome, e pedem sempre confirmação antes de marcar, enviar, criar ou escrever alguma coisa.
         </p>
       </div>
 

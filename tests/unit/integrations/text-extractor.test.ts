@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
-import { fileKind, FileTextExtractor } from "@/server/integrations/documents/text-extractor";
+import {
+  fileKind,
+  FileTextExtractor,
+  pdfPageCount,
+} from "@/server/integrations/documents/text-extractor";
 
 const extractor = new FileTextExtractor();
 const fixture = (name: string) => new Uint8Array(readFileSync(`tests/fixtures/${name}`));
@@ -53,5 +57,22 @@ describe("FileTextExtractor", () => {
     await expect(
       extractor.extract({ fileName: "folha.xlsx", mimeType: "", data: new Uint8Array([1]) }),
     ).rejects.toMatchObject({ status: 415, code: "UNSUPPORTED_FILE_TYPE" });
+  });
+
+  it("lê um CSV como texto, pela extensão ou pelo tipo", async () => {
+    const data = new TextEncoder().encode("Data,Valor\n12/11,40");
+
+    expect(fileKind("despesas.csv", "")).toBe("text");
+    await expect(
+      new FileTextExtractor().extract({ fileName: "", mimeType: "text/csv", data }),
+    ).resolves.toBe("Data,Valor\n12/11,40");
+  });
+
+  it("conta as páginas de um PDF", async () => {
+    await expect(pdfPageCount(fixture("exemplo.pdf"))).resolves.toBe(1);
+  });
+
+  it("não abre o que não é um PDF que se leia", async () => {
+    await expect(pdfPageCount(new TextEncoder().encode("isto não é um PDF"))).rejects.toThrow();
   });
 });

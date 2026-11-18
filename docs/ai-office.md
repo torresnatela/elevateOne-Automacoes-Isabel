@@ -24,8 +24,8 @@ parâmetros inválidos.
   "agentes": [
     {
       "id": "assistente-isabel",
-      "nome": "Assistente da Isabel",
-      "funcao": "Trata da agenda, do email e dos documentos da Isabel pelo WhatsApp"
+      "nome": "Assistente pessoal",
+      "funcao": "Trata da agenda, do email e dos documentos de cada pessoa da equipa pelo WhatsApp"
     }
   ],
   "eventos": [
@@ -35,7 +35,7 @@ parâmetros inválidos.
       "agente": "assistente-isabel",
       "estado": "trabalho",
       "tipo": null,
-      "texto": "A tratar de um pedido da Isabel",
+      "texto": "A tratar de um pedido pelo WhatsApp",
       "ferramenta": null,
       "minutos": 0
     },

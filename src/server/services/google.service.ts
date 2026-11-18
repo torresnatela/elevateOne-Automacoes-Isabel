@@ -9,9 +9,12 @@ import { AppError } from "@/server/lib/errors";
 import type { GoogleAccountRepository } from "@/server/repositories/google-account.repository";
 
 export class GoogleNotConnectedError extends AppError {
-  constructor() {
+  /** Com o endereço da página das integrações, a mensagem diz onde se liga. */
+  constructor(connectUrl?: string | null) {
     super(
-      "A conta Google ainda não está ligada. Ligue-a em Integrações.",
+      connectUrl
+        ? `A conta Google ainda não está ligada. Para a ligar: abrir ${connectUrl} e escolher «Ligar conta Google».`
+        : "A conta Google ainda não está ligada. Ligue-a em Integrações.",
       409,
       "GOOGLE_NOT_CONNECTED",
     );
@@ -44,6 +47,8 @@ export class GoogleService implements GoogleWorkspaceProvider {
     private readonly key: () => Buffer,
     private readonly now: () => number = Date.now,
     private readonly fetchFn: Fetch = fetch,
+    /** O endereço da página das integrações, para os erros dizerem onde se resolve. */
+    private readonly connectUrl: () => string | null = () => null,
   ) {}
 
   authUrl(state: string): string {
@@ -98,8 +103,9 @@ export class GoogleService implements GoogleWorkspaceProvider {
   }
 
   async workspaceFor(userId: string | null): Promise<GoogleWorkspace> {
-    if (!userId || !(await this.accounts.findByUserId(userId))) throw new GoogleNotConnectedError();
-    return new GoogleRestWorkspace(() => this.accessToken(userId), this.fetchFn);
+    if (!userId || !(await this.accounts.findByUserId(userId)))
+      throw new GoogleNotConnectedError(this.connectUrl());
+    return new GoogleRestWorkspace(() => this.accessToken(userId), this.fetchFn, this.connectUrl());
   }
 
   /** O access token em dia: o guardado, ou um novo pedido com o refresh token. */
@@ -108,7 +114,7 @@ export class GoogleService implements GoogleWorkspaceProvider {
     if (cached && cached.expiresAt - EXPIRY_MARGIN_MS > this.now()) return cached.accessToken;
 
     const account = await this.accounts.findByUserId(userId);
-    if (!account) throw new GoogleNotConnectedError();
+    if (!account) throw new GoogleNotConnectedError(this.connectUrl());
     try {
       const tokens = await this.oauth.refresh(
         decryptSecret(account.refreshTokenEncrypted, this.key()),
@@ -120,6 +126,7 @@ export class GoogleService implements GoogleWorkspaceProvider {
         // O acesso morreu do lado do Google: a conta deixa de contar como ligada.
         this.tokens.delete(userId);
         await this.accounts.delete(userId);
+        throw new GoogleReconnectError(this.connectUrl());
       }
       throw error;
     }

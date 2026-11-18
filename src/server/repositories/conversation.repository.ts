@@ -72,7 +72,8 @@ export class PrismaConversationRepository implements ConversationRepository {
   async findLatestExternal(agentId: string, channel: Channel, externalId: string) {
     return this.db.conversation.findFirst({
       where: { agentId, channel, externalId },
-      orderBy: { updatedAt: "desc" },
+      // No empate, a criada mais tarde: uma conversa aberta para largar outra tem de ganhar.
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     });
   }
 

@@ -29,6 +29,7 @@ const BY_EXTENSION: Record<string, FileKind> = {
   txt: "text",
   md: "text",
   markdown: "text",
+  csv: "text",
 };
 
 const BY_MIME: Record<string, FileKind> = {
@@ -36,12 +37,21 @@ const BY_MIME: Record<string, FileKind> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
   "text/plain": "text",
   "text/markdown": "text",
+  "text/csv": "text",
 };
 
 /** O tipo de um ficheiro, pela extensão e, sem ela, pelo tipo que o browser disse. */
 export function fileKind(fileName: string, mimeType: string): FileKind | null {
   const extension = fileName.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
   return (extension && BY_EXTENSION[extension]) || BY_MIME[mimeType.split(";")[0].trim()] || null;
+}
+
+/** Quantas páginas tem um PDF. Falha se não se deixar abrir (protegido por palavra-passe, danificado). */
+export async function pdfPageCount(data: Uint8Array): Promise<number> {
+  const { getDocumentProxy } = await import("unpdf");
+  // O unpdf fica com o buffer: dá-se-lhe uma cópia.
+  const pdf = await getDocumentProxy(new Uint8Array(data));
+  return pdf.numPages;
 }
 
 /** PDF (unpdf), DOCX (mammoth) e texto simples. Um PDF digitalizado, sem texto, dá vazio. */

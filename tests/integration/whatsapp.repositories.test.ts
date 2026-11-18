@@ -90,6 +90,32 @@ describe("WhatsApp e confirmação (Postgres real)", () => {
     expect(old.id).not.toBe(recent.id);
   });
 
+  it("entre duas conversas mexidas no mesmo instante, a mais recente é a que foi criada depois", async () => {
+    const first = await conversations.create({
+      agentId: "a",
+      channel: "WHATSAPP",
+      externalId: "351",
+    });
+    const second = await conversations.create({
+      agentId: "a",
+      channel: "WHATSAPP",
+      externalId: "351",
+    });
+    const instant = new Date("2026-11-12T10:00:00Z");
+    await prisma.conversation.update({
+      where: { id: second.id },
+      data: { createdAt: new Date("2026-11-12T09:00:00Z"), updatedAt: instant },
+    });
+    await prisma.conversation.update({
+      where: { id: first.id },
+      data: { createdAt: new Date("2026-11-12T09:30:00Z"), updatedAt: instant },
+    });
+
+    await expect(conversations.findLatestExternal("a", "WHATSAPP", "351")).resolves.toMatchObject({
+      id: first.id,
+    });
+  });
+
   it("guarda o número de um utilizador, único, e encontra-o por ele", async () => {
     const isabel = await users.create({ name: "Isabel", email: "i@e.pt", passwordHash: "h" });
     const rui = await users.create({ name: "Rui", email: "r@e.pt", passwordHash: "h" });

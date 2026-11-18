@@ -7,7 +7,10 @@ import {
   INTERNAL_ASSISTANT_ID,
   internalAssistant,
 } from "@/server/agents/definitions/internal-assistant";
-import { ISABEL_ASSISTANT_ID, isabelAssistant } from "@/server/agents/definitions/isabel-assistant";
+import {
+  PERSONAL_ASSISTANT_ID,
+  personalAssistant,
+} from "@/server/agents/definitions/personal-assistant";
 import { searchKnowledgeTool } from "@/server/agents/tools/search-knowledge.tool";
 import { googleTools } from "@/server/agents/tools/google.tools";
 import { WhatsappService } from "@/server/channels/whatsapp/whatsapp.service";
@@ -23,8 +26,9 @@ import { UserAdminController } from "@/server/controllers/user-admin.controller"
 import { WhatsappController } from "@/server/controllers/whatsapp.controller";
 import { GoogleController } from "@/server/controllers/google.controller";
 import { KnowledgeController } from "@/server/controllers/knowledge.controller";
+import { AnthropicFileStore } from "@/server/integrations/anthropic/anthropic-file-store";
 import { AnthropicLlmClient } from "@/server/integrations/anthropic/anthropic-llm.client";
-import { FileTextExtractor } from "@/server/integrations/documents/text-extractor";
+import { FileTextExtractor, pdfPageCount } from "@/server/integrations/documents/text-extractor";
 import { EvolutionClient } from "@/server/integrations/evolution/evolution.client";
 import { OpenAITranscriber } from "@/server/integrations/openai/openai-transcriber";
 import { GoogleOAuthClient } from "@/server/integrations/google/oauth";
@@ -72,9 +76,10 @@ export const agentRunner = new AgentRunner({
 });
 
 /** A base de conhecimento. */
+const textExtractor = new FileTextExtractor();
 export const knowledgeService = new KnowledgeService(
   new PrismaKnowledgeRepository(prisma),
-  new FileTextExtractor(),
+  textExtractor,
   OpenAIEmbedder.fromEnv(),
 );
 export const knowledgeController = new KnowledgeController(knowledgeService);
@@ -84,13 +89,18 @@ export const googleService = new GoogleService(
   new PrismaGoogleAccountRepository(prisma),
   GoogleOAuthClient.fromEnv(),
   () => encryptionKey(),
+  undefined,
+  undefined,
+  // Os erros de conta por ligar dizem onde se liga: o agente passa o endereço a quem pediu.
+  () => (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/+$/, "")}/integracoes` : null),
 );
 export const googleController = new GoogleController(googleService);
 
 // As automações: ferramentas primeiro, depois os agentes que as usam.
 agentRegistry.registerTool(searchKnowledgeTool(knowledgeService));
-for (const tool of googleTools(googleService)) agentRegistry.registerTool(tool);
-agentRegistry.registerAgent(internalAssistant).registerAgent(isabelAssistant);
+for (const tool of googleTools(googleService, undefined, textExtractor))
+  agentRegistry.registerTool(tool);
+agentRegistry.registerAgent(internalAssistant).registerAgent(personalAssistant);
 
 /** O canal do WhatsApp. */
 export const whatsappService = new WhatsappService({
@@ -100,7 +110,10 @@ export const whatsappService = new WhatsappService({
   runner: agentRunner,
   messenger: EvolutionClient.fromEnv(),
   transcriber: new OpenAITranscriber(),
-  agentId: ISABEL_ASSISTANT_ID,
+  files: AnthropicFileStore.fromEnv(),
+  extractor: textExtractor,
+  pdfPages: pdfPageCount,
+  agentId: PERSONAL_ASSISTANT_ID,
   log: (message) => console.warn(message),
 });
 export const whatsappController = new WhatsappController(

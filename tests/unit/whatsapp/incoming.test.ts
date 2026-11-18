@@ -48,8 +48,140 @@ describe("parseEvolutionWebhook", () => {
     ).toBeNull();
   });
 
-  it("uma imagem ou um documento conta como «outro»", () => {
-    expect(parseEvolutionWebhook(webhook({ imageMessage: {} }))).toMatchObject({ kind: "other" });
+  it("lê uma imagem, com a legenda como pedido", () => {
+    const image = parseEvolutionWebhook(
+      webhook({
+        imageMessage: {
+          mimetype: "image/jpeg",
+          caption: "  quanto é o total? ",
+          fileLength: "20480",
+        },
+        base64: "QUJD",
+      }),
+    );
+
+    expect(image).toMatchObject({
+      kind: "image",
+      text: "quanto é o total?",
+      media: { mimeType: "image/jpeg", size: 20480, base64: "QUJD" },
+    });
+  });
+
+  it("sem legenda, não inventa texto; sem tipo, uma imagem é um JPEG", () => {
+    const image = parseEvolutionWebhook(webhook({ imageMessage: {} }));
+
+    expect(image).toMatchObject({ kind: "image", media: { mimeType: "image/jpeg" } });
+    expect(image!.text).toBeUndefined();
+    expect(image!.media!.base64).toBeUndefined();
+  });
+
+  it("lê um documento, simples ou embrulhado com a legenda", () => {
+    const plain = parseEvolutionWebhook(
+      webhook({
+        documentMessage: { mimetype: "application/pdf", fileName: "fatura.pdf", fileLength: 1000 },
+      }),
+    );
+    expect(plain).toMatchObject({
+      kind: "document",
+      media: { mimeType: "application/pdf", fileName: "fatura.pdf", size: 1000 },
+    });
+
+    const wrapped = parseEvolutionWebhook(
+      webhook({
+        documentWithCaptionMessage: {
+          message: {
+            documentMessage: {
+              mimetype: "application/pdf",
+              fileName: "contrato.pdf",
+              caption: "vê isto",
+            },
+          },
+        },
+      }),
+    );
+    expect(wrapped).toMatchObject({
+      kind: "document",
+      text: "vê isto",
+      media: { fileName: "contrato.pdf" },
+    });
+  });
+
+  it("lê o tamanho venha ele como número, texto ou no formato longo", () => {
+    const sizeOf = (fileLength: unknown) =>
+      parseEvolutionWebhook(webhook({ imageMessage: { fileLength } }))!.media!.size;
+
+    expect(sizeOf(5000)).toBe(5000);
+    expect(sizeOf("5000")).toBe(5000);
+    expect(sizeOf({ low: 5000, high: 0, unsigned: true })).toBe(5000);
+    expect(sizeOf(undefined)).toBeUndefined();
+  });
+
+  it("desembrulha as mensagens temporárias e as de ver uma só vez", () => {
+    for (const wrapper of ["ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2"])
+      expect(
+        parseEvolutionWebhook(
+          webhook({ [wrapper]: { message: { imageMessage: { caption: "olha" } } } }),
+        ),
+      ).toMatchObject({ kind: "image", text: "olha" });
+  });
+
+  it("assinala as mensagens de ver uma só vez, venham embrulhadas ou marcadas", () => {
+    for (const wrapper of ["viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension"])
+      expect(
+        parseEvolutionWebhook(webhook({ [wrapper]: { message: { imageMessage: {} } } })),
+      ).toMatchObject({ kind: "image", viewOnce: true });
+    expect(
+      parseEvolutionWebhook(
+        webhook({
+          ephemeralMessage: { message: { viewOnceMessageV2: { message: { imageMessage: {} } } } },
+        }),
+      ),
+    ).toMatchObject({ kind: "image", viewOnce: true });
+    expect(
+      parseEvolutionWebhook(
+        webhook({ viewOnceMessageV2Extension: { message: { audioMessage: {} } } }),
+      ),
+    ).toMatchObject({ kind: "audio", viewOnce: true });
+    expect(parseEvolutionWebhook(webhook({ imageMessage: { viewOnce: true } }))).toMatchObject({
+      kind: "image",
+      viewOnce: true,
+    });
+  });
+
+  it("uma mensagem normal ou temporária não fica assinalada como de ver uma vez", () => {
+    expect(parseEvolutionWebhook(webhook({ imageMessage: {} }))?.viewOnce).toBeUndefined();
+    expect(
+      parseEvolutionWebhook(webhook({ ephemeralMessage: { message: { imageMessage: {} } } }))
+        ?.viewOnce,
+    ).toBeUndefined();
+  });
+
+  it("lê o texto e o áudio de uma conversa com mensagens temporárias", () => {
+    expect(
+      parseEvolutionWebhook(
+        webhook({
+          ephemeralMessage: { message: { extendedTextMessage: { text: " Que reuniões tenho? " } } },
+        }),
+      ),
+    ).toMatchObject({ kind: "text", text: "Que reuniões tenho?" });
+    expect(
+      parseEvolutionWebhook(webhook({ ephemeralMessage: { message: { conversation: "Olá" } } })),
+    ).toMatchObject({ kind: "text", text: "Olá" });
+    expect(
+      parseEvolutionWebhook(
+        webhook({
+          ephemeralMessage: { message: { audioMessage: { mimetype: "audio/ogg" } } },
+          base64: "QUJD",
+        }),
+      ),
+    ).toMatchObject({ kind: "audio", audio: { base64: "QUJD", mimeType: "audio/ogg" } });
+  });
+
+  it("um vídeo ou um autocolante conta como «outro»", () => {
+    expect(parseEvolutionWebhook(webhook({ videoMessage: {} }))).toMatchObject({ kind: "other" });
+    expect(parseEvolutionWebhook(webhook({ stickerMessage: {} }))).toMatchObject({
+      kind: "other",
+    });
   });
 
   it("ignora o que não é uma mensagem de uma pessoa para nós", () => {

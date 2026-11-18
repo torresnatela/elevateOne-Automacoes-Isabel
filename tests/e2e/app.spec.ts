@@ -69,7 +69,7 @@ test("o admin vê a base de conhecimento, os agentes e os números de WhatsApp",
   await page.goto("/admin/conhecimento");
   await expect(page.getByRole("heading", { name: "Base de conhecimento" })).toBeVisible();
   await expect(page.getByLabel(/Assistente interno/)).toBeVisible();
-  await expect(page.getByLabel(/Assistente da Isabel/)).toBeVisible();
+  await expect(page.getByLabel(/Assistente pessoal/)).toBeVisible();
 
   await page.goto("/admin/whatsapp");
   const phone = page.getByLabel("Número de WhatsApp de Administrador");

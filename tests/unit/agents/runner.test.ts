@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AgentRunner } from "@/server/agents/core/runner";
 import type { AgentDefinition, ToolContext, ToolDefinition } from "@/server/agents/core/types";
 import { AgentRegistry } from "@/server/agents/registry";
+import { AppError } from "@/server/lib/errors";
 import {
   FakeAgentEventRepository,
   FakeConversationRepository,
@@ -21,6 +22,7 @@ const agent: AgentDefinition = {
 function setup(
   script: ConstructorParameters<typeof FakeLlmClient>[0],
   done?: AgentDefinition["office"]["done"],
+  llmOf?: AgentDefinition["llm"],
 ) {
   const executed: Array<{ ctx: ToolContext; input: unknown }> = [];
   const procurar: ToolDefinition<{ q: string }> = {
@@ -32,6 +34,8 @@ function setup(
     execute: async (ctx, input) => {
       executed.push({ ctx, input });
       if (input.q === "explode") throw new Error("a base caiu");
+      if (input.q === "por ligar")
+        throw new AppError("A conta ainda não está ligada.", 409, "GOOGLE_NOT_CONNECTED");
       return { resultados: [`sobre ${input.q}`] };
     },
     office: { type: "apoio", tool: "claude", minutes: 3, doneText: "Esclareceu uma dúvida" },
@@ -60,7 +64,7 @@ function setup(
     .registerTool(procurar)
     .registerTool(marcar)
     .registerTool(consultar)
-    .registerAgent({ ...agent, office: { ...agent.office, done } });
+    .registerAgent({ ...agent, llm: llmOf, office: { ...agent.office, done } });
   const conversations = new FakeConversationRepository();
   const events = new FakeAgentEventRepository();
   const llm = new FakeLlmClient(script);
@@ -119,6 +123,45 @@ describe("AgentRunner", () => {
     await runner.run({ conversationId: c.id, text: "Olá" });
 
     expect(t.llm.requests[0].system).toBe("instruções novas de assistente");
+  });
+
+  it("pede a resposta ao modelo que o agente fixou", async () => {
+    const t = setup([says("Olá.")], undefined, { model: "claude-haiku-5-5", effort: "medium" });
+    const c = await t.start();
+
+    await t.runner.run({ conversationId: c.id, text: "Olá" });
+
+    expect(t.llm.requests[0]).toMatchObject({ model: "claude-haiku-5-5", effort: "medium" });
+  });
+
+  it("sem modelo fixado, deixa a escolha ao cliente", async () => {
+    const t = setup([says("Olá.")]);
+    const c = await t.start();
+
+    await t.runner.run({ conversationId: c.id, text: "Olá" });
+
+    expect(t.llm.requests[0].model).toBeUndefined();
+    expect(t.llm.requests[0].effort).toBeUndefined();
+  });
+
+  it("põe os anexos entre a nota de contexto e o que a pessoa escreveu", async () => {
+    const t = setup([says("É uma fatura.")]);
+    const c = await t.start();
+    const image = { type: "image", source: { type: "file", file_id: "file-1" } };
+
+    await t.runner.run({
+      conversationId: c.id,
+      text: "o que é isto?",
+      context: "[Agora: …]",
+      attachments: [image],
+    });
+
+    expect(t.llm.requests[0].messages[0].content).toEqual([
+      { type: "text", text: "[Agora: …]" },
+      image,
+      { type: "text", text: "o que é isto?" },
+    ]);
+    expect((await t.conversations.listMessages(c.id))[0].content[1]).toEqual(image);
   });
 
   it("envia o histórico da conversa nas mensagens seguintes", async () => {
@@ -233,6 +276,21 @@ describe("AgentRunner", () => {
       ["NEEDS_HELP", "alerta"],
       ["IDLE", null],
     ]);
+  });
+
+  it("um erro que a própria pessoa resolve chega ao modelo sem pedir ajuda no escritório", async () => {
+    const t = setup([
+      calls({ id: "t1", name: "procurar", input: { q: "por ligar" } }),
+      says("Falta ligar a conta."),
+    ]);
+    const c = await t.start();
+    await t.runner.run({ conversationId: c.id, text: "?" });
+
+    expect(t.llm.requests[1].messages.at(-1)!.content[0]).toMatchObject({
+      is_error: true,
+      content: "A conta ainda não está ligada.",
+    });
+    expect(t.events.events.map((e) => e.state)).toEqual(["WORKING", "IDLE"]);
   });
 
   it("conta no escritório o que fez: começa, faz a tarefa, fica livre", async () => {
