@@ -1,0 +1,5 @@
+# HTTPS automático (Let's Encrypt) para a Evolution API. O domínio tem de apontar para este servidor.
+{$EVOLUTION_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy evolution:8080
+}

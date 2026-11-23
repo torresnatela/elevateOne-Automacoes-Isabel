@@ -1,0 +1,99 @@
+# A app corre na Vercel; aqui, no servidor da Hostinger, ficam o Postgres, a Evolution API
+# (WhatsApp), o HTTPS da Evolution e os backups.
+# Uso: docker compose -f docker-compose.hostinger.yml --env-file .env.hostinger up -d
+# Ver docs/producao-vercel.md.
+name: elevateone
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+    # A Vercel liga-se pela internet: o Postgres fica aberto na porta 5432, só com SSL e senha forte.
+    # O certificado é o auto-assinado que já vem na imagem (Debian); chega para cifrar a ligação.
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+      - -c
+      - ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - max_connections=200
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      # Recusa ligações de fora sem SSL (as da rede interna do Docker continuam a poder ir sem).
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # A ponte para o WhatsApp. A Vercel chama-a pela internet (HTTPS pelo Caddy, com a apikey).
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SERVER_URL: https://${EVOLUTION_DOMAIN:?}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/evolution?schema=public
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - evolution
+    environment:
+      EVOLUTION_DOMAIN: ${EVOLUTION_DOMAIN:?}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/caddy/Caddyfile.evolution:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # Cópias diárias dos dois bancos para ./backups (7 dias, 4 semanas, 6 meses).
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:?},evolution
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - ./backups:/backups
+
+volumes:
+  pgdata:
+  evolution_instances:
+  caddy_data:
+  caddy_config:

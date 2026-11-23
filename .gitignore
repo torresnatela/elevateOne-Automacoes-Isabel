@@ -10,3 +10,5 @@ playwright-report
 test-results
 .env.production
 backups
+.env.hostinger
+.env.vercel
