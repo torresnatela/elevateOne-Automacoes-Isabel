@@ -13,14 +13,14 @@ export default async function UsersPage() {
 
   const users = await userAdminService.list();
   return (
-    <section className="stack">
-      <div>
-        <h1>Utilizadores</h1>
-        <p className="muted">
+    <div className="pagina">
+      <header className="pagina-cabeca">
+        <h1 className="titulo">Utilizadores</h1>
+        <p className="descricao">
           Quem pode entrar no sistema. Um utilizador usa o chat e liga a sua conta Google; um
           administrador gere também a base de conhecimento, os agentes e os utilizadores.
         </p>
-      </div>
+      </header>
       <UsersManager
         currentUserId={user.id}
         initialUsers={users.map((u) => ({
@@ -31,6 +31,6 @@ export default async function UsersPage() {
           active: u.active,
         }))}
       />
-    </section>
+    </div>
   );
 }

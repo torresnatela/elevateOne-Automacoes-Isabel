@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Icon } from "@/views/components/Icon";
 
 export interface GoogleStatusView {
   connected: boolean;
@@ -9,7 +10,7 @@ export interface GoogleStatusView {
   missingScopes: string[];
 }
 
-/** O que cada permissão em falta deixa de permitir, por palavras. */
+/** O que cada permissão deixa fazer, por palavras (as que o sistema pede ao Google). */
 const SCOPE_LABELS: Record<string, string> = {
   "calendar.events": "ver e marcar na agenda",
   "gmail.readonly": "ler emails",
@@ -31,9 +32,9 @@ const RESULTS: Record<string, { error: boolean; text: string }> = {
   },
 };
 
-const labelOf = (scope: string) => SCOPE_LABELS[scope.split("/auth/")[1] ?? scope] ?? scope;
+const keyOf = (scope: string) => scope.split("/auth/")[1] ?? scope;
 
-/** A conta Google de quem está a ver: ligar, ver o que falta, desligar. */
+/** A conta Google de quem está a ver: ligar, ver o que pode e o que falta, desligar. */
 export function GoogleConnection({
   status,
   result,
@@ -45,6 +46,20 @@ export function GoogleConnection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const outcome = result ? RESULTS[result] : undefined;
+
+  const missing = new Set(status.missingScopes.map(keyOf));
+  const permissions = [
+    ...Object.entries(SCOPE_LABELS).map(([key, label]) => ({
+      key,
+      label,
+      given: !missing.has(key),
+    })),
+    // (uma permissão que falta e que esta página ainda não sabe dizer por palavras)
+    ...[...missing]
+      .filter((key) => !(key in SCOPE_LABELS))
+      .map((key) => ({ key, label: key, given: false })),
+  ];
+  const missingCount = permissions.filter((p) => !p.given).length;
 
   async function disconnect() {
     if (
@@ -68,55 +83,105 @@ export function GoogleConnection({
   }
 
   return (
-    <div className="panel stack">
-      <div>
-        <h2>Google</h2>
-        <p className="muted">
-          Agenda, Gmail, Contactos, Drive e folhas de cálculo. Os agentes agem nesta conta em seu
-          nome, e pedem sempre confirmação antes de marcar, enviar, criar ou escrever alguma coisa.
-        </p>
+    <section className="cartao" style={{ gap: 20, padding: 24 }}>
+      <div className="cartao-cabeca">
+        <span className="ladrilho" aria-hidden="true">
+          <Icon name="ligacao" />
+        </span>
+        <div className="cartao-textos">
+          <h2 className="cartao-titulo">Google</h2>
+          <p className="cartao-desc">
+            {status.connected ? (
+              <>
+                Ligada como <strong>{status.email}</strong>
+              </>
+            ) : (
+              "Agenda, Gmail, Contactos, Drive e folhas de cálculo."
+            )}
+          </p>
+        </div>
+        {status.connected ? (
+          <span className={missingCount > 0 ? "estado aviso" : "estado sucesso"}>
+            <span className="ponto" />
+            <span>{missingCount > 0 ? "Faltam permissões" : "Ligada"}</span>
+          </span>
+        ) : (
+          <span className="estado neutro">
+            <span className="ponto" />
+            <span>Por ligar</span>
+          </span>
+        )}
       </div>
 
       {outcome && (
-        <p role={outcome.error ? "alert" : "status"} className={outcome.error ? "error" : "muted"}>
+        <p
+          role={outcome.error ? "alert" : "status"}
+          className={outcome.error ? "mensagem erro" : "mensagem sucesso"}
+        >
           {outcome.text}
         </p>
       )}
       {error && (
-        <p role="alert" className="error">
+        <p role="alert" className="mensagem erro">
           {error}
         </p>
       )}
 
       {status.connected ? (
         <>
-          <p>
-            Ligada como <strong>{status.email}</strong>.
-          </p>
-          {status.missingScopes.length > 0 && (
-            <div>
-              <p className="error">Faltam permissões. Sem elas, os agentes não conseguem:</p>
-              <ul>
-                {status.missingScopes.map((scope) => (
-                  <li key={scope}>{labelOf(scope)}</li>
-                ))}
-              </ul>
+          <div className="campo">
+            <h3 className="rotulo">O que os agentes podem fazer nesta conta</h3>
+            <ul className="permissoes">
+              {permissions.map((p) => (
+                <li key={p.key} className={p.given ? undefined : "falta"}>
+                  <span className={p.given ? "dada" : undefined}>
+                    <Icon name={p.given ? "certo" : "aviso"} small />
+                  </span>
+                  <span>{p.label}</span>
+                  {!p.given && <span className="selo">Em falta</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {missingCount > 0 && (
+            <div className="mensagem aviso cartao-cabeca">
+              <span style={{ flex: "1 1 280px" }}>
+                {missingCount === 1 ? "Falta uma permissão." : `Faltam ${missingCount} permissões.`}{" "}
+                Sem elas, os agentes não conseguem fazer o que está assinalado.
+              </span>
+              <a className="botao primario" href="/api/google/connect">
+                Dar as permissões
+              </a>
             </div>
           )}
-          <div className="row">
-            {status.missingScopes.length > 0 && <a href="/api/google/connect">Dar as permissões</a>}
-            <button type="button" className="link danger" disabled={busy} onClick={disconnect}>
+
+          <div className="cartao-pe">
+            <p className="cartao-desc" style={{ flex: "1 1 320px" }}>
+              Os agentes pedem sempre confirmação antes de marcar, enviar, criar ou escrever alguma
+              coisa.
+            </p>
+            <button
+              type="button"
+              className="botao fantasma perigo"
+              disabled={busy}
+              onClick={disconnect}
+            >
               {busy ? "A desligar…" : "Desligar"}
             </button>
           </div>
         </>
       ) : (
-        <div>
-          <a className="button" href="/api/google/connect">
+        <div className="cartao-pe">
+          <p className="cartao-desc" style={{ flex: "1 1 320px" }}>
+            Os agentes agem nesta conta em seu nome, e pedem sempre confirmação antes de marcar,
+            enviar, criar ou escrever alguma coisa.
+          </p>
+          <a className="botao primario grande" href="/api/google/connect">
             Ligar conta Google
           </a>
         </div>
       )}
-    </div>
+    </section>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import Markdown from "react-markdown";
+import { BrandMark } from "@/views/components/BrandMark";
+import { Icon } from "@/views/components/Icon";
 import { readNdjson } from "@/views/lib/ndjson";
 
 export interface ConversationView {
@@ -22,12 +24,26 @@ type StreamEvent =
   | { type: "error"; message: string };
 
 const CONNECTION_ERROR = "Não foi possível ligar ao servidor. Tente novamente.";
+const AGENT_NAME = "Assistente interno";
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error?.message ?? "Algo correu mal.");
   return data as T;
+}
+
+/** Uma resposta do agente: o seu símbolo, o nome e o texto (ou o que está a fazer). */
+function Answer({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="resposta">
+      <BrandMark size="pequeno" />
+      <div className="resposta-corpo">
+        <p className="resposta-autor">{AGENT_NAME}</p>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /** O chat interno: as conversas à esquerda, a conversa aberta e a caixa de escrever à direita. */
@@ -40,10 +56,21 @@ export function ChatView({ initialConversations }: { initialConversations: Conve
   const [answering, setAnswering] = useState<{ text: string; status: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" });
   }, [messages, answering]);
+
+  // A caixa cresce com o texto, até ao máximo do CSS.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
+
+  const title = conversations.find((c) => c.id === activeId)?.title ?? "Nova conversa";
 
   async function open(id: string) {
     if (answering) return;
@@ -63,6 +90,7 @@ export function ChatView({ initialConversations }: { initialConversations: Conve
     setActiveId(null);
     setMessages([]);
     setError(null);
+    box.current?.focus();
   }
 
   async function remove(conversation: ConversationView) {
@@ -147,74 +175,129 @@ export function ChatView({ initialConversations }: { initialConversations: Conve
 
   return (
     <div className="chat">
-      <aside className="chat-list" aria-label="Conversas">
-        <button type="button" onClick={startNew} disabled={!!answering}>
+      <aside className="chat-lista" aria-label="Conversas">
+        <button
+          type="button"
+          className="botao primario grande largo"
+          onClick={startNew}
+          disabled={!!answering}
+        >
+          <Icon name="mais" />
           Nova conversa
         </button>
+        {conversations.length > 0 && <p className="rotulo">Conversas</p>}
         <ul>
           {conversations.map((c) => (
-            <li key={c.id} className={c.id === activeId ? "active" : undefined}>
-              <button type="button" className="link chat-open" onClick={() => open(c.id)}>
+            <li key={c.id} className={c.id === activeId ? "conversa aberta" : "conversa"}>
+              <button
+                type="button"
+                className="conversa-abrir"
+                aria-current={c.id === activeId ? "true" : undefined}
+                onClick={() => open(c.id)}
+              >
                 {c.title}
               </button>
               <button
                 type="button"
-                className="link danger"
+                className="botao fantasma perigo so-icone conversa-apagar"
                 aria-label={`Apagar a conversa ${c.title}`}
+                title="Apagar"
                 onClick={() => remove(c)}
               >
-                ×
+                <Icon name="apagar" small />
               </button>
             </li>
           ))}
         </ul>
       </aside>
 
-      <section className="chat-main">
-        <div className="chat-messages" aria-live="polite">
-          {messages.length === 0 && !answering && (
-            <p className="muted chat-empty">
-              Pergunte o que precisar: um procedimento do escritório, uma dúvida fiscal, um email
-              para rever. As respostas vêm da base de conhecimento do escritório, quando ela cobre o
-              assunto.
-            </p>
-          )}
-          {messages.map((m) => (
-            <div key={m.id} className={`bubble ${m.role === "USER" ? "mine" : "theirs"}`}>
-              {m.role === "USER" ? m.text : <Markdown>{m.text}</Markdown>}
-            </div>
-          ))}
+      <section className="chat-principal" aria-label="Conversa aberta">
+        <header className="chat-cabeca">
+          <h1 className="chat-titulo">{title}</h1>
           {answering && (
-            <div className="bubble theirs">
-              {answering.text ? (
-                <Markdown>{answering.text}</Markdown>
-              ) : (
-                <span className="muted" role="status">
-                  {answering.status ?? "A pensar…"}
+            <span className="estado trabalho">
+              <span className="ponto vivo" />
+              <span>{AGENT_NAME} a responder</span>
+            </span>
+          )}
+        </header>
+
+        <div className="chat-mensagens" aria-live="polite">
+          <div className="chat-fio">
+            {messages.length === 0 && !answering && (
+              <div className="vazio chat-vazio">
+                <span className="ladrilho" aria-hidden="true">
+                  <Icon name="chat" />
                 </span>
-              )}
-            </div>
-          )}
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
-          <div ref={end} />
+                <p className="vazio-titulo">Em que posso ajudar?</p>
+                <p>
+                  Pergunte o que precisar: um procedimento do escritório, uma dúvida fiscal, um
+                  email para rever. As respostas vêm da base de conhecimento do escritório, quando
+                  ela cobre o assunto.
+                </p>
+              </div>
+            )}
+            {messages.map((m) =>
+              m.role === "USER" ? (
+                <p key={m.id} className="bubble">
+                  {m.text}
+                </p>
+              ) : (
+                <Answer key={m.id}>
+                  <div className="prosa">
+                    <Markdown>{m.text}</Markdown>
+                  </div>
+                </Answer>
+              ),
+            )}
+            {answering && (
+              <Answer>
+                {answering.text ? (
+                  <div className="prosa">
+                    <Markdown>{answering.text}</Markdown>
+                  </div>
+                ) : (
+                  <span className="estado trabalho" role="status">
+                    <span className="ponto vivo" />
+                    <span>{answering.status ?? "A pensar…"}</span>
+                  </span>
+                )}
+              </Answer>
+            )}
+            {error && (
+              <p role="alert" className="mensagem erro">
+                {error}
+              </p>
+            )}
+            <div ref={end} />
+          </div>
         </div>
 
-        <form className="chat-composer" onSubmit={onSubmit}>
-          <textarea
-            aria-label="Mensagem"
-            placeholder="Escreva a sua pergunta…"
-            rows={2}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKeyDown}
-          />
-          <button type="submit" disabled={!!answering || !draft.trim()}>
-            Enviar
-          </button>
+        <form className="chat-compor" onSubmit={onSubmit}>
+          <div className="compositor">
+            <textarea
+              ref={box}
+              aria-label="Mensagem"
+              placeholder="Escreva a sua pergunta…"
+              rows={1}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={onKeyDown}
+            />
+            <button
+              type="submit"
+              className="botao primario grande so-icone"
+              aria-label="Enviar"
+              title="Enviar"
+              disabled={!!answering || !draft.trim()}
+            >
+              <Icon name="enviar" />
+            </button>
+          </div>
+          <p className="chat-dica">
+            Enter envia · Shift+Enter muda de linha · As respostas vêm da base de conhecimento do
+            escritório
+          </p>
         </form>
       </section>
     </div>

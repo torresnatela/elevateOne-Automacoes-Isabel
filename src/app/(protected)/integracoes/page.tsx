@@ -15,12 +15,12 @@ export default async function IntegrationsPage({
 
   const [status, { google }] = await Promise.all([googleService.status(user.id), searchParams]);
   return (
-    <section className="stack">
-      <div>
-        <h1>Integrações</h1>
-        <p className="muted">As contas que os agentes podem usar em seu nome.</p>
-      </div>
+    <div className="pagina estreita">
+      <header className="pagina-cabeca">
+        <h1 className="titulo">Integrações</h1>
+        <p className="descricao">As contas que os agentes podem usar em seu nome.</p>
+      </header>
       <GoogleConnection status={status} result={google} />
-    </section>
+    </div>
   );
 }

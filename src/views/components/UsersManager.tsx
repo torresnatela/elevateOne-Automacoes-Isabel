@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { initials } from "@/views/lib/initials";
 
 export interface UserView {
   id: string;
@@ -93,84 +94,133 @@ export function UsersManager({
   }
 
   return (
-    <div className="stack">
-      <form ref={form} className="panel form" onSubmit={create}>
-        <label htmlFor="name">Nome</label>
-        <input id="name" name="name" required />
+    <>
+      <form ref={form} className="cartao formulario" onSubmit={create}>
+        <div className="pagina-cabeca" style={{ gap: 2 }}>
+          <h2 className="cartao-titulo">Novo utilizador</h2>
+          <p className="cartao-desc">Entra com o e-mail e a senha que definir aqui.</p>
+        </div>
 
-        <label htmlFor="email">E-mail</label>
-        <input id="email" name="email" type="email" required />
+        <div className="grelha-campos">
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="name">
+              Nome
+            </label>
+            <input className="entrada" id="name" name="name" required />
+          </div>
 
-        <label htmlFor="password">Senha inicial (pelo menos 8 caracteres)</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          minLength={8}
-          required
-          autoComplete="new-password"
-        />
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="email">
+              E-mail
+            </label>
+            <input className="entrada" id="email" name="email" type="email" required />
+          </div>
 
-        <label htmlFor="role">Papel</label>
-        <select id="role" name="role" defaultValue="USER">
-          <option value="USER">Utilizador</option>
-          <option value="ADMIN">Administrador</option>
-        </select>
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="password">
+              Senha inicial
+            </label>
+            <input
+              className="entrada"
+              id="password"
+              name="password"
+              type="password"
+              minLength={8}
+              required
+              autoComplete="new-password"
+              aria-describedby="password-ajuda"
+            />
+            <span className="ajuda" id="password-ajuda">
+              Pelo menos 8 caracteres.
+            </span>
+          </div>
 
-        <button type="submit" disabled={busy}>
-          Criar utilizador
-        </button>
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="role">
+              Papel
+            </label>
+            <select className="entrada" id="role" name="role" defaultValue="USER">
+              <option value="USER">Utilizador</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <button type="submit" className="botao primario grande" disabled={busy}>
+            Criar utilizador
+          </button>
+        </div>
       </form>
 
       {status && (
-        <p role={status.error ? "alert" : "status"} className={status.error ? "error" : "muted"}>
+        <p
+          role={status.error ? "alert" : "status"}
+          className={status.error ? "mensagem erro" : "mensagem sucesso"}
+        >
           {status.text}
         </p>
       )}
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Nome</th>
-            <th>E-mail</th>
-            <th>Papel</th>
-            <th>Estado</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => (
-            <tr key={user.id}>
-              <td>{user.name}</td>
-              <td className="muted">{user.email}</td>
-              <td>{user.role === "ADMIN" ? "Administrador" : "Utilizador"}</td>
-              <td>{user.active ? "Ativo" : "Desativado"}</td>
-              <td>
-                <div className="row">
-                  <button
-                    type="button"
-                    className="link"
-                    disabled={busy}
-                    onClick={() => reset(user)}
-                  >
-                    Repor senha
-                  </button>
-                  {user.id !== currentUserId && (
+      <div className="moldura-tabela">
+        <table className="tabela">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Papel</th>
+              <th>Estado</th>
+              <th>
+                <span className="so-leitor">Ações</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id}>
+                <td>
+                  <span className="pessoa forte">
+                    <span className={user.active ? "avatar" : "avatar apagado"} aria-hidden="true">
+                      {initials(user.name)}
+                    </span>
+                    {user.name}
+                  </span>
+                </td>
+                <td>{user.email}</td>
+                <td>{user.role === "ADMIN" ? "Administrador" : "Utilizador"}</td>
+                <td>
+                  <span className={user.active ? "estado sucesso" : "estado neutro"}>
+                    <span className="ponto" />
+                    <span>{user.active ? "Ativo" : "Desativado"}</span>
+                  </span>
+                </td>
+                <td className="acoes">
+                  <div className="linha">
                     <button
                       type="button"
-                      className={user.active ? "link danger" : "link"}
+                      className="botao fantasma"
                       disabled={busy}
-                      onClick={() => toggle(user)}
+                      onClick={() => reset(user)}
                     >
-                      {user.active ? "Desativar" : "Reativar"}
+                      Repor senha
                     </button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                    {user.id !== currentUserId && (
+                      <button
+                        type="button"
+                        className={user.active ? "botao fantasma perigo" : "botao fantasma"}
+                        disabled={busy}
+                        onClick={() => toggle(user)}
+                      >
+                        {user.active ? "Desativar" : "Reativar"}
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

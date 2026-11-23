@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Icon } from "@/views/components/Icon";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -12,8 +13,14 @@ export function LogoutButton() {
   }
 
   return (
-    <button type="button" className="link" onClick={logout}>
-      Sair
+    <button
+      type="button"
+      className="botao fantasma grande so-icone"
+      aria-label="Sair"
+      title="Sair"
+      onClick={logout}
+    >
+      <Icon name="sair" />
     </button>
   );
 }

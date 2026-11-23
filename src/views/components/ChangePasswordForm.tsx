@@ -45,37 +45,69 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <form className="panel form" onSubmit={onSubmit}>
-      <label htmlFor="currentPassword">Senha atual</label>
-      <input
-        id="currentPassword"
-        name="currentPassword"
-        type="password"
-        autoComplete="current-password"
-        required
-      />
+    <form className="cartao formulario" onSubmit={onSubmit}>
+      <h2 className="cartao-titulo">Trocar a senha</h2>
 
-      <label htmlFor="newPassword">Senha nova (pelo menos 8 caracteres)</label>
-      <input
-        id="newPassword"
-        name="newPassword"
-        type="password"
-        autoComplete="new-password"
-        minLength={8}
-        required
-      />
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="currentPassword">
+          Senha atual
+        </label>
+        <input
+          className="entrada"
+          id="currentPassword"
+          name="currentPassword"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+      </div>
 
-      <label htmlFor="repeat">Repita a senha nova</label>
-      <input id="repeat" name="repeat" type="password" autoComplete="new-password" required />
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="newPassword">
+          Senha nova
+        </label>
+        <input
+          className="entrada"
+          id="newPassword"
+          name="newPassword"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
+          aria-describedby="newPassword-ajuda"
+          required
+        />
+        <span className="ajuda" id="newPassword-ajuda">
+          Pelo menos 8 caracteres.
+        </span>
+      </div>
+
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="repeat">
+          Repita a senha nova
+        </label>
+        <input
+          className="entrada"
+          id="repeat"
+          name="repeat"
+          type="password"
+          autoComplete="new-password"
+          required
+        />
+      </div>
 
       {status && (
-        <p role={status.error ? "alert" : "status"} className={status.error ? "error" : "muted"}>
+        <p
+          role={status.error ? "alert" : "status"}
+          className={status.error ? "mensagem erro" : "mensagem sucesso"}
+        >
           {status.text}
         </p>
       )}
-      <button type="submit" disabled={busy}>
-        Trocar senha
-      </button>
+      <div>
+        <button type="submit" className="botao primario grande" disabled={busy}>
+          Trocar senha
+        </button>
+      </div>
     </form>
   );
 }

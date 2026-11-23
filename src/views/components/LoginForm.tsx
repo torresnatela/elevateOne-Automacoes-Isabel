@@ -39,27 +39,44 @@ export function LoginForm({ next }: { next?: string }) {
   }
 
   return (
-    <form className="form" onSubmit={onSubmit} noValidate>
-      <label htmlFor="email">E-mail</label>
-      <input id="email" name="email" type="email" autoComplete="username" required />
+    <form className="cartao formulario" onSubmit={onSubmit} noValidate>
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="email">
+          E-mail
+        </label>
+        <input
+          className="entrada"
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="username"
+          placeholder="nome@escritorio.pt"
+          required
+        />
+      </div>
 
-      <label htmlFor="password">Senha</label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        autoComplete="current-password"
-        required
-      />
+      <div className="campo">
+        <label className="campo-rotulo" htmlFor="password">
+          Senha
+        </label>
+        <input
+          className="entrada"
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+      </div>
 
       {error && (
-        <p role="alert" className="error">
+        <p role="alert" className="mensagem erro">
           {error}
         </p>
       )}
 
-      <button type="submit" disabled={loading}>
-        {loading ? "Entrando..." : "Entrar"}
+      <button type="submit" className="botao primario grande largo" disabled={loading}>
+        {loading ? "A entrar…" : "Entrar"}
       </button>
     </form>
   );
