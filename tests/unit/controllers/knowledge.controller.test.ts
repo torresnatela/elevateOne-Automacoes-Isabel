@@ -9,7 +9,6 @@ import { KnowledgeService } from "@/server/services/knowledge.service";
 import { createSessionToken } from "@/server/services/session.service";
 import {
   FakeAgentSettingRepository,
-  FakeEmbedder,
   FakeKnowledgeRepository,
   FakeTextExtractor,
 } from "../../setup/fake-knowledge";
@@ -45,11 +44,7 @@ describe("KnowledgeController", () => {
   beforeEach(() => {
     repository = new FakeKnowledgeRepository();
     controller = new KnowledgeController(
-      new KnowledgeService(
-        repository,
-        new FakeTextExtractor("O IVA normal é 23 %."),
-        new FakeEmbedder(["iva"]),
-      ),
+      new KnowledgeService(repository, new FakeTextExtractor("O IVA normal é 23 %.")),
     );
   });
 

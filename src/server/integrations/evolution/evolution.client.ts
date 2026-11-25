@@ -3,7 +3,7 @@ import { AppError } from "@/server/lib/errors";
 /** Enviar e ir buscar mensagens do WhatsApp. O canal depende desta interface. */
 export interface WhatsappMessenger {
   sendText(phone: string, text: string): Promise<void>;
-  /** O ficheiro de uma mensagem recebida: áudio, imagem ou documento (a mensagem como veio no webhook). */
+  /** O ficheiro de uma mensagem recebida: imagem ou documento (a mensagem como veio no webhook). */
   downloadMedia(
     rawMessage: unknown,
     options?: { maxBytes?: number },

@@ -115,16 +115,19 @@ model KnowledgeDocument {
   @@map("knowledge_documents")
 }
 
-/// Um pedaço de um ficheiro, com o seu vetor (pgvector) para a procura por sentido.
+/// Um pedaço de um ficheiro. `search_vector` é gerado pelo Postgres (texto completo, português,
+/// sem acentos) a partir do conteúdo; ver a migração `knowledge_full_text_search`.
 model KnowledgeChunk {
-  id         String                      @id @default(uuid()) @db.Uuid
-  documentId String                      @map("document_id") @db.Uuid
-  position   Int
-  content    String
-  embedding  Unsupported("vector(1536)")
-  document   KnowledgeDocument           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  id           String                   @id @default(uuid()) @db.Uuid
+  documentId   String                   @map("document_id") @db.Uuid
+  position     Int
+  content      String
+  // Coluna gerada (GENERATED ALWAYS AS ... STORED): o Prisma vê-a como um default.
+  searchVector Unsupported("tsvector")? @default(dbgenerated("to_tsvector('portuguese'::regconfig, immutable_unaccent(content))")) @map("search_vector")
+  document     KnowledgeDocument        @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId, position])
+  @@index([searchVector], type: Gin)
   @@map("knowledge_chunks")
 }
 

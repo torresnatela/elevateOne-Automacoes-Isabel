@@ -49,7 +49,7 @@ function splitLong(paragraph: string, size: number): string[] {
 }
 
 /**
- * Parte um texto em pedaços para a procura por sentido: junta parágrafos inteiros
+ * Parte um texto em pedaços para a procura na base de conhecimento: junta parágrafos inteiros
  * até ao tamanho, e cada pedaço começa com o fim do anterior. Lógica pura.
  */
 export function chunkText(

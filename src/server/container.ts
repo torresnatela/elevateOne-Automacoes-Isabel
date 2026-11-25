@@ -31,10 +31,8 @@ import { AnthropicFileStore } from "@/server/integrations/anthropic/anthropic-fi
 import { AnthropicLlmClient } from "@/server/integrations/anthropic/anthropic-llm.client";
 import { FileTextExtractor, pdfPageCount } from "@/server/integrations/documents/text-extractor";
 import { EvolutionClient } from "@/server/integrations/evolution/evolution.client";
-import { OpenAITranscriber } from "@/server/integrations/openai/openai-transcriber";
 import { GoogleOAuthClient } from "@/server/integrations/google/oauth";
 import { MicrosoftOAuthClient } from "@/server/integrations/microsoft/oauth";
-import { OpenAIEmbedder } from "@/server/integrations/openai/openai-embedder";
 import { PrismaAgentEventRepository } from "@/server/repositories/agent-event.repository";
 import { PrismaAgentSettingRepository } from "@/server/repositories/agent-setting.repository";
 import { PrismaConversationRepository } from "@/server/repositories/conversation.repository";
@@ -84,7 +82,6 @@ const textExtractor = new FileTextExtractor();
 export const knowledgeService = new KnowledgeService(
   new PrismaKnowledgeRepository(prisma),
   textExtractor,
-  OpenAIEmbedder.fromEnv(),
 );
 export const knowledgeController = new KnowledgeController(knowledgeService);
 
@@ -128,7 +125,6 @@ export const whatsappService = new WhatsappService({
   conversations: conversationRepository,
   runner: agentRunner,
   messenger: EvolutionClient.fromEnv(),
-  transcriber: new OpenAITranscriber(),
   files: AnthropicFileStore.fromEnv(),
   extractor: textExtractor,
   pdfPages: pdfPageCount,

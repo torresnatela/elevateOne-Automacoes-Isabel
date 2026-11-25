@@ -62,7 +62,7 @@ const CONFIRMATION_TOOLS: LlmTool[] = [
 
 export interface RunInput {
   conversationId: string;
-  /** O que a pessoa escreveu (ou disse, já transcrito). */
+  /** O que a pessoa escreveu. */
   text: string;
   /** O que o agente precisa de saber nesta vez e não vem na mensagem (a data e a hora de agora). */
   context?: string;

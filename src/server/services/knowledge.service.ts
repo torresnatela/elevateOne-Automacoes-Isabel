@@ -1,12 +1,7 @@
 import type { SourceFile, TextExtractor } from "@/server/integrations/documents/text-extractor";
-import type { Embedder } from "@/server/integrations/openai/openai-embedder";
 import { chunkText } from "@/server/lib/chunk";
 import { AppError } from "@/server/lib/errors";
-import {
-  EMBEDDING_DIMENSIONS,
-  type KnowledgeDocument,
-  type KnowledgeHit,
-} from "@/server/models/knowledge.model";
+import type { KnowledgeDocument, KnowledgeHit } from "@/server/models/knowledge.model";
 import type { KnowledgeRepository } from "@/server/repositories/knowledge.repository";
 
 /** O maior ficheiro que se aceita (bytes). */
@@ -21,16 +16,19 @@ export interface IngestInput extends SourceFile {
 export interface SearchOptions {
   /** Quantos pedaços, no máximo. */
   limit?: number;
-  /** Abaixo desta semelhança (0 a 1), um pedaço não conta como resposta. */
+  /** Abaixo desta relevância (0 a 1), um pedaço não conta como resposta. */
   minScore?: number;
 }
 
-/** A base de conhecimento: recebe ficheiros, parte-os em pedaços e procura por sentido. */
+/**
+ * A base de conhecimento: recebe ficheiros, parte-os em pedaços e procura-os por texto completo.
+ * Não há embeddings: quem escreve a pergunta (com os termos e sinónimos certos) e quem lê os
+ * excertos e decide o que serve é o Claude, através da ferramenta `buscar_conhecimento`.
+ */
 export class KnowledgeService {
   constructor(
     private readonly repository: KnowledgeRepository,
     private readonly extractor: TextExtractor,
-    private readonly embedder: Embedder,
   ) {}
 
   async ingest(input: IngestInput): Promise<KnowledgeDocument> {
@@ -47,7 +45,6 @@ export class KnowledgeService {
         "NO_TEXT_FOUND",
       );
 
-    const embeddings = await this.embed(chunks);
     return this.repository.createDocument(
       {
         title: input.title?.trim() || input.fileName.replace(/\.[^.]+$/, ""),
@@ -56,7 +53,7 @@ export class KnowledgeService {
         size: input.data.byteLength,
         uploadedById: input.uploadedById ?? null,
       },
-      chunks.map((content, i) => ({ content, embedding: embeddings[i] })),
+      chunks.map((content) => ({ content })),
     );
   }
 
@@ -70,19 +67,9 @@ export class KnowledgeService {
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<KnowledgeHit[]> {
-    const { limit = 6, minScore = 0.25 } = options;
+    const { limit = 8, minScore = 0 } = options;
     if (!query.trim()) return [];
-    const [embedding] = await this.embed([query]);
-    const hits = await this.repository.search(embedding, limit);
-    return hits.filter((hit) => hit.score >= minScore);
-  }
-
-  private async embed(texts: string[]): Promise<number[][]> {
-    const vectors = await this.embedder.embed(texts);
-    for (const vector of vectors) {
-      if (vector.length !== EMBEDDING_DIMENSIONS || !vector.every(Number.isFinite))
-        throw new Error(`Vetor inválido: esperavam-se ${EMBEDDING_DIMENSIONS} números.`);
-    }
-    return vectors;
+    const hits = await this.repository.search(query, limit);
+    return hits.filter((hit) => hit.score > 0 && hit.score >= minScore);
   }
 }
