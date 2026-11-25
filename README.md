@@ -107,7 +107,7 @@ src/server/
     tools/         as ferramentas (zod + execute)
     registry.ts
   channels/        whatsapp (o chat do site está em services/chat.service.ts)
-  integrations/    anthropic, openai, google, evolution, documents
+  integrations/    anthropic, openai, google, microsoft (OneDrive), evolution, documents
 ```
 
 **Para acrescentar uma automação:** crie as ferramentas em `agents/tools/`, o agente em
@@ -122,7 +122,7 @@ pessoa.
 | Página                | Quem  | Para quê                                                      |
 | --------------------- | ----- | ------------------------------------------------------------- |
 | `/chat`               | todos | O chat interno                                                |
-| `/integracoes`        | todos | Ligar a conta Google (cada pessoa liga a sua)                 |
+| `/integracoes`        | todos | Ligar a conta Google e a Microsoft/OneDrive (cada pessoa a sua) |
 | `/conta`              | todos | Trocar a própria senha                                        |
 | `/admin/utilizadores` | ADMIN | Criar utilizadores, desativar, repor a senha                  |
 | `/admin/conhecimento` | ADMIN | Ficheiros da base de conhecimento e instruções de cada agente |
@@ -136,6 +136,7 @@ pessoa.
 | `ANTHROPIC_WORKSPACE_ID`                                                | Opcional: o id do workspace, para uma chave da Anthropic que não está ligada a nenhum         |
 | `OPENAI_API_KEY`                                                        | Embeddings da base de conhecimento e transcrição                                              |
 | `APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ENCRYPTION_KEY` | Ligação ao Google                                                                             |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | Ligação ao OneDrive (com `APP_URL` e `ENCRYPTION_KEY`). Guia em `docs/onedrive.md`            |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`          | WhatsApp (Evolution API)                                                                      |
 | `WHATSAPP_WEBHOOK_SECRET`                                               | O segredo que o webhook do WhatsApp exige                                                     |
 | `OFFICE_API_TOKEN`                                                      | O token com que o AI Office lê os eventos                                                     |
@@ -150,6 +151,11 @@ No ecrã de consentimento, junte as permissões que a app pede (a lista está em
 tinha a conta ligada vê em `/integracoes` o que falta e o botão «Dar as permissões».
 Com uma conta Workspace, marque a app como «Interna». Com uma conta @gmail.com, o acesso expira a
 cada 7 dias enquanto a app estiver em modo de teste.
+
+**OneDrive.** Registe uma aplicação no Microsoft Entra com o URI de redirecionamento
+`<APP_URL>/api/microsoft/callback` e as permissões delegadas `User.Read`, `Files.ReadWrite.All` e
+`offline_access`. Cada pessoa liga a sua conta em `/integracoes` e escolhe a pasta da empresa
+(pelo link de partilha ou pelo caminho). O passo a passo está em `docs/onedrive.md`.
 
 **WhatsApp.** `docker compose --profile whatsapp up -d` sobe a Evolution API em `:8080`. Crie a
 instância com o nome de `EVOLUTION_INSTANCE`, leia o QR code com o telemóvel do número do agente

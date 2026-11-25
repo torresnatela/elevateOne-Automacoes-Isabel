@@ -26,6 +26,7 @@ model User {
   conversations      Conversation[]
   knowledgeDocuments KnowledgeDocument[]
   googleAccount      GoogleAccount?
+  microsoftAccount   MicrosoftAccount?
 
   @@map("users")
 }
@@ -150,6 +151,27 @@ model GoogleAccount {
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("google_accounts")
+}
+
+/// A conta Microsoft (OneDrive) que um utilizador ligou, e a pasta da empresa que escolheu.
+model MicrosoftAccount {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @unique @map("user_id") @db.Uuid
+  email                 String
+  /// O refresh token, cifrado (AES-256-GCM, chave em ENCRYPTION_KEY). A Microsoft troca-o a cada renovação.
+  refreshTokenEncrypted String   @map("refresh_token_encrypted")
+  /// As permissões que a pessoa deu, separadas por espaços.
+  scopes                String
+  /// A pasta onde a empresa guarda os documentos (o drive e o item no Microsoft Graph).
+  folderDriveId         String?  @map("folder_drive_id")
+  folderItemId          String?  @map("folder_item_id")
+  folderName            String?  @map("folder_name")
+  folderWebUrl          String?  @map("folder_web_url")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("microsoft_accounts")
 }
 
 enum PendingActionStatus {
