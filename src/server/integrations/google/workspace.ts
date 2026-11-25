@@ -55,6 +55,10 @@ export interface EmailMessage extends EmailSummary {
   /** O texto da mensagem (cortado, se for muito longo). */
   body: string;
   attachments: EmailAttachment[];
+  /** A conversa do Gmail a que pertence. */
+  threadId?: string;
+  /** O cabeçalho Message-ID: o mesmo em todas as caixas que receberam o email. */
+  rfcMessageId?: string;
 }
 
 export interface NewEmail {
@@ -123,6 +127,8 @@ export interface GoogleWorkspace {
   deleteEvent(id: string): Promise<void>;
 
   searchEmails(query: string, limit: number): Promise<EmailSummary[]>;
+  /** Só os ids dos emails que batem na procura (do mais recente para trás), sem os ler. */
+  listMessageIds(query: string, limit: number): Promise<string[]>;
   getEmail(id: string): Promise<EmailMessage>;
   sendEmail(email: NewEmail): Promise<{ id: string }>;
   /** A quem e como responder a um email. Com `all`, também a quem estava no Para e em cópia. */

@@ -11,6 +11,8 @@ export const PUBLIC_PATHS = [
   // O AI Office lê os eventos com o seu próprio token, sem sessão.
   "/api/office",
   "/api/health",
+  // O agendamento da Vercel não tem sessão: confere o CRON_SECRET.
+  "/api/jobs",
 ];
 
 /** Regras de papel mínimo por prefixo de rota (verificadas no middleware). */

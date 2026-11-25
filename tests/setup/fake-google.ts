@@ -25,6 +25,13 @@ export class FakeGoogleAccountRepository implements GoogleAccountRepository {
   async findByUserId(userId: string) {
     return this.accounts.get(userId) ?? null;
   }
+  async listAll() {
+    return [...this.accounts.values()].map((a) => ({
+      id: `acc-${a.userId}`,
+      userId: a.userId,
+      email: a.email,
+    }));
+  }
   async save(account: GoogleAccountData) {
     const saved = { ...account, updatedAt: new Date() };
     this.accounts.set(account.userId, saved);
@@ -143,6 +150,11 @@ export class FakeGoogleWorkspace implements GoogleWorkspace {
       .slice(0, limit)
       .map(({ body: _body, attachments: _attachments, ...summary }) => summary);
   }
+  async listMessageIds(query: string, limit: number) {
+    this.calls.push(["listMessageIds", query, limit]);
+    return this.emails.slice(0, limit).map((e) => e.id);
+  }
+
   async getEmail(id: string) {
     const email = this.emails.find((e) => e.id === id);
     if (!email) throw new Error("O email não existe.");

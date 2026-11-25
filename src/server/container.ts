@@ -27,6 +27,12 @@ import { WhatsappController } from "@/server/controllers/whatsapp.controller";
 import { GoogleController } from "@/server/controllers/google.controller";
 import { MicrosoftController } from "@/server/controllers/microsoft.controller";
 import { KnowledgeController } from "@/server/controllers/knowledge.controller";
+import { ClientController } from "@/server/controllers/client.controller";
+import { ClientMailController } from "@/server/controllers/client-mail.controller";
+import { AnthropicInvoiceExtractor } from "@/server/integrations/anthropic/invoice-extractor";
+import { PrismaClientMailRepository } from "@/server/repositories/client-mail.repository";
+import { ClientMailService } from "@/server/services/client-mail.service";
+import { ClientMailSyncService } from "@/server/services/client-mail-sync.service";
 import { AnthropicFileStore } from "@/server/integrations/anthropic/anthropic-file-store";
 import { AnthropicLlmClient } from "@/server/integrations/anthropic/anthropic-llm.client";
 import { FileTextExtractor, pdfPageCount } from "@/server/integrations/documents/text-extractor";
@@ -44,6 +50,7 @@ import { PrismaInboundMessageRepository } from "@/server/repositories/inbound-me
 import { PrismaKnowledgeRepository } from "@/server/repositories/knowledge.repository";
 import { PrismaPendingActionRepository } from "@/server/repositories/pending-action.repository";
 import { PrismaUserRepository } from "@/server/repositories/user.repository";
+import { PrismaClientRepository } from "@/server/repositories/client.repository";
 import { AgentSettingsService } from "@/server/services/agent-settings.service";
 import { AuthService } from "@/server/services/auth.service";
 import { GoogleService } from "@/server/services/google.service";
@@ -51,6 +58,7 @@ import { MicrosoftService } from "@/server/services/microsoft.service";
 import { OfficeService } from "@/server/services/office.service";
 import { UserAdminService } from "@/server/services/user-admin.service";
 import { KnowledgeService } from "@/server/services/knowledge.service";
+import { ClientService } from "@/server/services/client.service";
 
 /** Composição das dependências (injeção manual). Ponto único para trocar implementações. */
 export const userRepository = new PrismaUserRepository(prisma);
@@ -94,8 +102,9 @@ function integrationsUrl() {
 }
 
 /** As contas Google ligadas. */
+const googleAccountRepository = new PrismaGoogleAccountRepository(prisma);
 export const googleService = new GoogleService(
-  new PrismaGoogleAccountRepository(prisma),
+  googleAccountRepository,
   GoogleOAuthClient.fromEnv(),
   () => encryptionKey(),
   undefined,
@@ -138,6 +147,33 @@ export const whatsappService = new WhatsappService({
 export const whatsappController = new WhatsappController(
   whatsappService,
   () => process.env.WHATSAPP_WEBHOOK_SECRET,
+  (task) => after(task),
+);
+
+/** O cadastro dos clientes do gabinete. */
+export const clientRepository = new PrismaClientRepository(prisma);
+export const clientService = new ClientService(clientRepository);
+export const clientController = new ClientController(clientService);
+
+/** O agente de faturas: lê os emails dos clientes nas caixas Gmail ligadas. */
+const clientMailRepository = new PrismaClientMailRepository(prisma);
+export const clientMailService = new ClientMailService(
+  clientMailRepository,
+  googleAccountRepository,
+  googleService,
+);
+export const clientMailSyncService = new ClientMailSyncService({
+  accounts: googleAccountRepository,
+  google: googleService,
+  clients: clientRepository,
+  mail: clientMailRepository,
+  extractor: AnthropicInvoiceExtractor.fromEnv(),
+  log: (message) => console.warn(message),
+});
+export const clientMailController = new ClientMailController(
+  clientMailService,
+  clientMailSyncService,
+  () => process.env.CRON_SECRET,
   (task) => after(task),
 );
 

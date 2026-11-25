@@ -17,6 +17,8 @@ interface NavLink {
 const MAIN: NavLink[] = [
   { href: "/dashboard", label: "Início", icon: "inicio" },
   { href: "/chat", label: "Chat", icon: "chat" },
+  { href: "/clientes", label: "Clientes", icon: "pasta" },
+  { href: "/faturas", label: "Faturas", icon: "documento" },
   { href: "/integracoes", label: "Integrações", icon: "ligacao" },
 ];
 

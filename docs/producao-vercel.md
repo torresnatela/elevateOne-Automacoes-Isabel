@@ -59,6 +59,24 @@ curl -X POST https://$EVOLUTION_DOMAIN/webhook/set/$EVOLUTION_INSTANCE \
   -d '{"webhook":{"enabled":true,"url":"'"$APP_URL"'/api/webhooks/whatsapp","events":["MESSAGES_UPSERT"],"base64":false,"headers":{"x-webhook-secret":"'"$WHATSAPP_WEBHOOK_SECRET"'"}}}'
 ```
 
+## 5. Agente de faturas
+
+O agente lê, de hora a hora, os emails dos clientes (os endereços e domínios da ficha de cada
+cliente) em todas as contas Google ligadas em *Integrações*, resume-os e tira os campos das
+faturas anexas. O agendamento está em [`vercel.json`](../vercel.json) (`schedules` →
+`client-mail-sync`, um `POST` a `/api/jobs/client-mail-sync`).
+
+1. Ponha `CRON_SECRET` (um texto aleatório, pelo menos 16 caracteres) nas variáveis de
+   **Production**: a Vercel manda-o no cabeçalho `Authorization: Bearer …` e a rota recusa
+   pedidos sem ele.
+2. Para correr já, sem esperar pela hora: `vercel schedules invoke client-mail-sync`, ou o botão
+   «Sincronizar agora» na página *Faturas*.
+3. Cada corrida lê no máximo 40 emails novos (cada um é uma chamada ao modelo); o resto fica para
+   a corrida seguinte. Na primeira, vai até 90 dias para trás.
+
+Os ficheiros das faturas não se copiam: ficam no Gmail e descarregam-se de lá ao abrir. Se a pessoa
+que ligou a caixa a desligar, as faturas dessa caixa continuam listadas mas deixam de abrir.
+
 ## O que muda em relação a um só servidor
 
 - **Mais de uma instância.** A Vercel pode correr a app em várias instâncias ao mesmo tempo. A fila

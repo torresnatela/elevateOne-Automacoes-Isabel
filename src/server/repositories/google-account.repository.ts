@@ -10,9 +10,18 @@ export interface GoogleAccount {
 
 export type GoogleAccountData = Omit<GoogleAccount, "updatedAt">;
 
+/** Uma conta ligada, como o agente de faturas a percorre. */
+export interface ConnectedGoogleAccount {
+  id: string;
+  userId: string;
+  email: string;
+}
+
 /** Contrato de persistência das contas Google ligadas (uma por utilizador). */
 export interface GoogleAccountRepository {
   findByUserId(userId: string): Promise<GoogleAccount | null>;
+  /** Todas as contas ligadas. */
+  listAll(): Promise<ConnectedGoogleAccount[]>;
   /** Liga ou volta a ligar: a conta nova fica no lugar da anterior. */
   save(account: GoogleAccountData): Promise<GoogleAccount>;
   delete(userId: string): Promise<void>;
@@ -26,6 +35,13 @@ export class PrismaGoogleAccountRepository implements GoogleAccountRepository {
   async findByUserId(userId: string) {
     if (!UUID_RE.test(userId)) return null;
     return this.db.googleAccount.findUnique({ where: { userId } });
+  }
+
+  async listAll() {
+    return this.db.googleAccount.findMany({
+      select: { id: true, userId: true, email: true },
+      orderBy: { createdAt: "asc" },
+    });
   }
 
   async save(account: GoogleAccountData) {
