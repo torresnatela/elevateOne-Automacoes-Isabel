@@ -25,6 +25,7 @@ import { OfficeController } from "@/server/controllers/office.controller";
 import { UserAdminController } from "@/server/controllers/user-admin.controller";
 import { WhatsappController } from "@/server/controllers/whatsapp.controller";
 import { GoogleController } from "@/server/controllers/google.controller";
+import { MicrosoftController } from "@/server/controllers/microsoft.controller";
 import { KnowledgeController } from "@/server/controllers/knowledge.controller";
 import { AnthropicFileStore } from "@/server/integrations/anthropic/anthropic-file-store";
 import { AnthropicLlmClient } from "@/server/integrations/anthropic/anthropic-llm.client";
@@ -32,11 +33,13 @@ import { FileTextExtractor, pdfPageCount } from "@/server/integrations/documents
 import { EvolutionClient } from "@/server/integrations/evolution/evolution.client";
 import { OpenAITranscriber } from "@/server/integrations/openai/openai-transcriber";
 import { GoogleOAuthClient } from "@/server/integrations/google/oauth";
+import { MicrosoftOAuthClient } from "@/server/integrations/microsoft/oauth";
 import { OpenAIEmbedder } from "@/server/integrations/openai/openai-embedder";
 import { PrismaAgentEventRepository } from "@/server/repositories/agent-event.repository";
 import { PrismaAgentSettingRepository } from "@/server/repositories/agent-setting.repository";
 import { PrismaConversationRepository } from "@/server/repositories/conversation.repository";
 import { PrismaGoogleAccountRepository } from "@/server/repositories/google-account.repository";
+import { PrismaMicrosoftAccountRepository } from "@/server/repositories/microsoft-account.repository";
 import { PrismaInboundMessageRepository } from "@/server/repositories/inbound-message.repository";
 import { PrismaKnowledgeRepository } from "@/server/repositories/knowledge.repository";
 import { PrismaPendingActionRepository } from "@/server/repositories/pending-action.repository";
@@ -44,6 +47,7 @@ import { PrismaUserRepository } from "@/server/repositories/user.repository";
 import { AgentSettingsService } from "@/server/services/agent-settings.service";
 import { AuthService } from "@/server/services/auth.service";
 import { GoogleService } from "@/server/services/google.service";
+import { MicrosoftService } from "@/server/services/microsoft.service";
 import { OfficeService } from "@/server/services/office.service";
 import { UserAdminService } from "@/server/services/user-admin.service";
 import { KnowledgeService } from "@/server/services/knowledge.service";
@@ -84,6 +88,11 @@ export const knowledgeService = new KnowledgeService(
 );
 export const knowledgeController = new KnowledgeController(knowledgeService);
 
+/** A página das integrações: os erros de conta por ligar dizem onde se liga, e o agente passa o endereço. */
+function integrationsUrl() {
+  return process.env.APP_URL ? `${process.env.APP_URL.replace(/\/+$/, "")}/integracoes` : null;
+}
+
 /** As contas Google ligadas. */
 export const googleService = new GoogleService(
   new PrismaGoogleAccountRepository(prisma),
@@ -91,10 +100,20 @@ export const googleService = new GoogleService(
   () => encryptionKey(),
   undefined,
   undefined,
-  // Os erros de conta por ligar dizem onde se liga: o agente passa o endereço a quem pediu.
-  () => (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/+$/, "")}/integracoes` : null),
+  integrationsUrl,
 );
 export const googleController = new GoogleController(googleService);
+
+/** As contas Microsoft ligadas (OneDrive) e a pasta da empresa de cada uma. */
+export const microsoftService = new MicrosoftService(
+  new PrismaMicrosoftAccountRepository(prisma),
+  MicrosoftOAuthClient.fromEnv(),
+  () => encryptionKey(),
+  undefined,
+  undefined,
+  integrationsUrl,
+);
+export const microsoftController = new MicrosoftController(microsoftService);
 
 // As automações: ferramentas primeiro, depois os agentes que as usam.
 agentRegistry.registerTool(searchKnowledgeTool(knowledgeService));
