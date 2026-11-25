@@ -15,7 +15,6 @@ import {
   FakeInboundMessageRepository,
   FakeLlmFileStore,
   FakeMessenger,
-  FakeTranscriber,
   webhook,
 } from "../../setup/fake-whatsapp";
 
@@ -59,7 +58,6 @@ async function setup(script: ConstructorParameters<typeof FakeLlmClient>[0] = []
     now: () => clock.now,
   });
   const messenger = new FakeMessenger();
-  const transcriber = new FakeTranscriber();
   const files = new FakeLlmFileStore();
   /** O que abrir um PDF devolve: o número de páginas, ou um erro se não se deixar abrir. */
   const pdf = { pages: async (_data: Uint8Array): Promise<number> => 3 };
@@ -70,7 +68,6 @@ async function setup(script: ConstructorParameters<typeof FakeLlmClient>[0] = []
     conversations,
     runner,
     messenger,
-    transcriber,
     files,
     extractor: new FileTextExtractor(),
     pdfPages: async (data) => pdf.pages(data),
@@ -87,7 +84,6 @@ async function setup(script: ConstructorParameters<typeof FakeLlmClient>[0] = []
     llm,
     clock,
     messenger,
-    transcriber,
     files,
     pdf,
     marked,
@@ -233,56 +229,26 @@ describe("WhatsappService", () => {
     await expect(t.service.handle({ event: "connection.update" })).resolves.toBe("ignored");
   });
 
-  it("passa um áudio a texto: usa o que vem no webhook ou vai buscá-lo", async () => {
-    const t = await setup([says("Vou ver."), says("Outra vez.")]);
-    const inline = webhook(
-      {
-        audioMessage: { mimetype: "audio/ogg" },
-        base64: Buffer.from("áudio do webhook").toString("base64"),
-      },
-      { id: "A1" },
+  it("não ouve áudios: pede o pedido por escrito, sem ir buscar o ficheiro", async () => {
+    const t = await setup([says("nunca")]);
+    await t.service.handle(
+      webhook(
+        {
+          audioMessage: { mimetype: "audio/ogg" },
+          base64: Buffer.from("áudio do webhook").toString("base64"),
+        },
+        { id: "A1" },
+      ),
     );
-    await t.service.handle(inline);
     await t.service.handle(webhook({ audioMessage: {} }, { id: "A2" }));
 
-    expect(t.transcriber.heard).toEqual(["áudio do webhook", "áudio descarregado"]);
-    expect(t.messenger.downloads).toHaveLength(1);
-    const [context, message] = t.llm.requests[0].messages[0].content;
-    expect(message.text).toBe("marca uma reunião com o João amanhã às 15h");
-    expect(context.text).toContain("transcrita de um áudio");
-  });
-
-  it("um áudio comprido demais é recusado com uma explicação", async () => {
-    const t = await setup();
-    t.messenger.media = { data: new Uint8Array(26 * 1024 * 1024), mimeType: "audio/ogg" };
-
-    await t.service.handle(webhook({ audioMessage: {} }));
-
-    expect(t.messenger.sent).toEqual([{ phone: PHONE, text: REPLIES.audioTooLong }]);
-    expect(t.transcriber.heard).toEqual([]);
-  });
-
-  it("um áudio comprido demais que já vem no webhook também é recusado", async () => {
-    const t = await setup([says("nunca")]);
-
-    await t.service.handle(
-      webhook({
-        audioMessage: { mimetype: "audio/ogg" },
-        base64: Buffer.alloc(26 * 1024 * 1024).toString("base64"),
-      }),
-    );
-
-    expect(t.messenger.sent).toEqual([{ phone: PHONE, text: REPLIES.audioTooLong }]);
-    expect(t.transcriber.heard).toEqual([]);
-  });
-
-  it("pede para repetir quando o áudio não se percebe", async () => {
-    const t = await setup();
-    t.transcriber.says = "";
-    await t.service.handle(webhook({ audioMessage: {} }));
-
-    expect(t.messenger.sent).toEqual([{ phone: PHONE, text: REPLIES.emptyAudio }]);
+    expect(t.messenger.sent).toEqual([
+      { phone: PHONE, text: REPLIES.audio },
+      { phone: PHONE, text: REPLIES.audio },
+    ]);
+    expect(t.messenger.downloads).toEqual([]);
     expect(t.llm.requests).toEqual([]);
+    expect(t.conversations.conversations).toEqual([]);
   });
 
   it("diz o que consegue ler quando recebe outra coisa", async () => {
@@ -529,7 +495,7 @@ describe("WhatsappService", () => {
       expect(t.conversations.conversations).toEqual([]);
     });
 
-    it("um áudio de ouvir uma só vez também não é transcrito", async () => {
+    it("um áudio de ouvir uma só vez recebe o aviso de ver uma vez", async () => {
       const t = await setup([says("nunca")]);
       const once = webhook({
         viewOnceMessageV2Extension: { message: { audioMessage: { mimetype: "audio/ogg" } } },
@@ -538,7 +504,7 @@ describe("WhatsappService", () => {
       await t.service.handle(once);
 
       expect(t.messenger.sent).toEqual([{ phone: PHONE, text: REPLIES.viewOnce }]);
-      expect(t.transcriber.heard).toEqual([]);
+      expect(t.messenger.downloads).toEqual([]);
     });
 
     it("ao cortar um documento comprido, não deixa um emoji partido a meio", async () => {

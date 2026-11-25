@@ -13,7 +13,7 @@ Um só servidor com Docker corre tudo: a app, o Postgres, a Evolution API (Whats
 - Um servidor Linux com Docker e Docker Compose (2 vCPU e 4 GB de RAM chegam para começar), com
   as portas 80 e 443 abertas.
 - Um domínio (por exemplo `app.exemplo.pt`) a apontar para o IP do servidor.
-- As chaves: Anthropic, OpenAI, as credenciais OAuth do Google (com o URI de redirecionamento
+- As chaves: Anthropic, as credenciais OAuth do Google (com o URI de redirecionamento
   `https://<domínio>/api/google/callback`).
 - Um número de telemóvel só para o agente do WhatsApp.
 
@@ -79,7 +79,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --bui
 As migrations novas correm sozinhas antes de a app nova arrancar.
 
 **Folhas de cálculo.** A versão com Google Sheets pede uma permissão nova. Antes de atualizar,
-ative a *Google Sheets API* no projeto do Google Cloud e junte `.../auth/spreadsheets` ao ecrã de
+ative a _Google Sheets API_ no projeto do Google Cloud e junte `.../auth/spreadsheets` ao ecrã de
 consentimento. Depois de atualizar, cada pessoa abre `/integracoes` e escolhe «Dar as permissões»;
 até lá, o assistente responde-lhe com esse endereço quando lhe pedirem uma folha de cálculo.
 
@@ -115,8 +115,9 @@ ela, as contas Google têm de ser ligadas de novo.
 - **Reiniciar a app a meio de uma resposta** perde essa resposta: a pessoa tem de pedir outra vez.
 - **O WhatsApp não é oficial.** A Meta pode desligar ou bloquear o número. Se o agente deixar de
   responder, veja primeiro o estado da instância em `http://localhost:8080/manager`.
-- **Dados de clientes saem do servidor**: o texto das conversas vai para a Anthropic, e os
-  ficheiros da base de conhecimento e os áudios vão para a OpenAI. As fotografias e os PDFs
+- **Dados de clientes saem do servidor**: o texto das conversas e os excertos da base de
+  conhecimento vão para a Anthropic (os ficheiros da base ficam no banco). As mensagens de voz
+  do WhatsApp não são ouvidas: o assistente pede que o pedido venha por escrito. As fotografias e os PDFs
   enviados pelo WhatsApp ficam guardados na Anthropic enquanto a conversa dura: a app apaga-os
   quando a pessoa começa a conversa seguinte, e envia-os com uma validade de 48 horas para os
   que ficarem para trás (a validade tira o acesso ao conteúdo; os registos do ficheiro podem

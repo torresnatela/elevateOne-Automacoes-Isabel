@@ -6,7 +6,10 @@ const schema = z.object({
   pergunta: z
     .string()
     .min(1)
-    .describe("O que procurar, em linguagem natural e com os termos que os documentos usariam."),
+    .describe(
+      "Palavras-chave a procurar: os termos que os documentos usariam, com sinónimos e siglas " +
+        '(ex.: "IVA taxa reduzida isenção"). A procura é por palavras, não por sentido.',
+    ),
 });
 
 export const SEARCH_KNOWLEDGE_TOOL = "buscar_conhecimento";
@@ -20,8 +23,10 @@ export function searchKnowledgeTool(
     description:
       "Procura na base de conhecimento do escritório (procedimentos, regras internas, guias e notas da Isabel). " +
       "Usa-a antes de responder a qualquer dúvida sobre como o escritório trabalha ou sobre matéria contabilística e fiscal. " +
-      "Devolve excertos com o título do documento de origem; se não encontrar nada, a base não cobre o assunto. " +
-      "Podes procurar mais de uma vez, com outras palavras.",
+      "A procura é por palavras (sem acentos e sem distinguir singular/plural), não por sentido: " +
+      "escreve os termos que os documentos usariam, juntando sinónimos e siglas. " +
+      "Devolve excertos com o título do documento de origem, do mais para o menos relevante; lê-os e usa só os que respondem. " +
+      "Se não encontrar nada ou os excertos não servirem, procura outra vez com outras palavras antes de concluir que a base não cobre o assunto.",
     schema,
     requiresConfirmation: false,
     statusText: "A consultar a base de conhecimento…",

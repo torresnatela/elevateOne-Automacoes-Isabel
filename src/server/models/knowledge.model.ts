@@ -1,8 +1,5 @@
 /** Models de domínio da base de conhecimento. Independentes do Prisma. */
 
-/** O tamanho dos vetores (o do modelo de embeddings e o da coluna `vector`). */
-export const EMBEDDING_DIMENSIONS = 1536;
-
 export interface KnowledgeDocument {
   id: string;
   title: string;
@@ -25,7 +22,6 @@ export interface NewKnowledgeDocument {
 
 export interface NewKnowledgeChunk {
   content: string;
-  embedding: number[];
 }
 
 /** Um pedaço encontrado numa procura. */
@@ -33,6 +29,6 @@ export interface KnowledgeHit {
   content: string;
   documentId: string;
   documentTitle: string;
-  /** Semelhança com a pergunta, de 0 a 1 (cosseno). */
+  /** Relevância para a pergunta, de 0 a 1 (mais termos da pergunta, mais perto uns dos outros, mais alto). */
   score: number;
 }

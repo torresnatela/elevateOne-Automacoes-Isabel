@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type {
   KnowledgeDocument,
@@ -18,14 +17,14 @@ export interface KnowledgeRepository {
   listDocuments(): Promise<KnowledgeDocument[]>;
   /** Apaga o ficheiro e os pedaços. `false` se não existia. */
   deleteDocument(id: string): Promise<boolean>;
-  /** Os pedaços mais parecidos com o vetor, do mais para o menos parecido. */
-  search(embedding: number[], limit: number): Promise<KnowledgeHit[]>;
+  /**
+   * Os pedaços que têm algum dos termos da pergunta, do mais para o menos relevante.
+   * Procura por texto completo (português, sem acentos): "faturas" encontra "fatura".
+   */
+  search(query: string, limit: number): Promise<KnowledgeHit[]>;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** O vetor como o pgvector o lê: `[0.1,0.2,…]`. */
-const toVector = (embedding: number[]) => `[${embedding.join(",")}]`;
 
 export class PrismaKnowledgeRepository implements KnowledgeRepository {
   constructor(private readonly db: PrismaClient) {}
@@ -43,13 +42,14 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
             uploadedById: doc.uploadedById ?? null,
           },
         });
-        // A coluna `vector` não existe no cliente do Prisma: os pedaços entram por SQL.
-        for (const [position, chunk] of chunks.entries()) {
-          await tx.$executeRaw`
-            INSERT INTO "knowledge_chunks" ("id", "document_id", "position", "content", "embedding")
-            VALUES (${randomUUID()}::uuid, ${row.id}::uuid, ${position}, ${chunk.content},
-                    ${toVector(chunk.embedding)}::vector)`;
-        }
+        // O `search_vector` é gerado pelo Postgres a partir do conteúdo.
+        await tx.knowledgeChunk.createMany({
+          data: chunks.map((chunk, position) => ({
+            documentId: row.id,
+            position,
+            content: chunk.content,
+          })),
+        });
         return row;
       },
       { timeout: 120_000 },
@@ -66,14 +66,21 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
     return count > 0;
   }
 
-  async search(embedding: number[], limit: number) {
-    const vector = toVector(embedding);
+  async search(query: string, limit: number) {
+    // Os termos da pergunta ligados por OU (o `plainto_tsquery` liga-os por E): basta um
+    // termo para o pedaço aparecer, e quantos mais tiver, mais acima fica.
+    // `ts_rank_cd(..., 32)` devolve rank / (rank + 1), de 0 a 1.
     const rows = await this.db.$queryRaw<KnowledgeHit[]>`
+      WITH q AS (
+        SELECT replace(plainto_tsquery('portuguese', immutable_unaccent(${query}))::text, '&', '|')::tsquery AS terms
+      )
       SELECT c."content", c."document_id" AS "documentId", d."title" AS "documentTitle",
-             (1 - (c."embedding" <=> ${vector}::vector))::float8 AS "score"
+             ts_rank_cd(c."search_vector", q.terms, 32)::float8 AS "score"
       FROM "knowledge_chunks" c
       JOIN "knowledge_documents" d ON d."id" = c."document_id"
-      ORDER BY c."embedding" <=> ${vector}::vector
+      CROSS JOIN q
+      WHERE c."search_vector" @@ q.terms
+      ORDER BY "score" DESC, c."document_id", c."position"
       LIMIT ${limit}`;
     return rows;
   }

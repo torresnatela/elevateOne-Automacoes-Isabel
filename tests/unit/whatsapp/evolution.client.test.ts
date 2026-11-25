@@ -1,5 +1,4 @@
 import { EvolutionClient } from "@/server/integrations/evolution/evolution.client";
-import { audioExtension } from "@/server/integrations/openai/openai-transcriber";
 
 function fakeFetch(status: number, json: unknown) {
   const calls: Array<{ url: string; headers: Headers; body: unknown }> = [];
@@ -104,14 +103,5 @@ describe("EvolutionClient", () => {
     await expect(client.sendText("351", "x")).rejects.toMatchObject({
       code: "WHATSAPP_NOT_CONFIGURED",
     });
-  });
-});
-
-describe("audioExtension", () => {
-  it("dá à API a extensão do tipo de áudio (as mensagens de voz são ogg/opus)", () => {
-    expect(audioExtension("audio/ogg; codecs=opus")).toBe("ogg");
-    expect(audioExtension("audio/mpeg")).toBe("mp3");
-    expect(audioExtension("audio/mp4")).toBe("m4a");
-    expect(audioExtension("desconhecido")).toBe("ogg");
   });
 });

@@ -107,7 +107,7 @@ src/server/
     tools/         as ferramentas (zod + execute)
     registry.ts
   channels/        whatsapp (o chat do site está em services/chat.service.ts)
-  integrations/    anthropic, openai, google, microsoft (OneDrive), evolution, documents
+  integrations/    anthropic, google, microsoft (OneDrive), evolution, documents
 ```
 
 **Para acrescentar uma automação:** crie as ferramentas em `agents/tools/`, o agente em
@@ -119,14 +119,14 @@ pessoa.
 
 ### Páginas
 
-| Página                | Quem  | Para quê                                                      |
-| --------------------- | ----- | ------------------------------------------------------------- |
-| `/chat`               | todos | O chat interno                                                |
+| Página                | Quem  | Para quê                                                        |
+| --------------------- | ----- | --------------------------------------------------------------- |
+| `/chat`               | todos | O chat interno                                                  |
 | `/integracoes`        | todos | Ligar a conta Google e a Microsoft/OneDrive (cada pessoa a sua) |
-| `/conta`              | todos | Trocar a própria senha                                        |
-| `/admin/utilizadores` | ADMIN | Criar utilizadores, desativar, repor a senha                  |
-| `/admin/conhecimento` | ADMIN | Ficheiros da base de conhecimento e instruções de cada agente |
-| `/admin/whatsapp`     | ADMIN | Os números de WhatsApp autorizados a falar com o assistente   |
+| `/conta`              | todos | Trocar a própria senha                                          |
+| `/admin/utilizadores` | ADMIN | Criar utilizadores, desativar, repor a senha                    |
+| `/admin/conhecimento` | ADMIN | Ficheiros da base de conhecimento e instruções de cada agente   |
+| `/admin/whatsapp`     | ADMIN | Os números de WhatsApp autorizados a falar com o assistente     |
 
 ### Configuração (`.env`)
 
@@ -134,7 +134,6 @@ pessoa.
 | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`, `ANTHROPIC_EFFORT`)             | O modelo dos agentes (Claude). Um agente pode fixar o seu em `llm`: o do WhatsApp usa o Haiku |
 | `ANTHROPIC_WORKSPACE_ID`                                                | Opcional: o id do workspace, para uma chave da Anthropic que não está ligada a nenhum         |
-| `OPENAI_API_KEY`                                                        | Embeddings da base de conhecimento e transcrição                                              |
 | `APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ENCRYPTION_KEY` | Ligação ao Google                                                                             |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | Ligação ao OneDrive (com `APP_URL` e `ENCRYPTION_KEY`). Guia em `docs/onedrive.md`            |
 | `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`          | WhatsApp (Evolution API)                                                                      |
@@ -162,8 +161,8 @@ instância com o nome de `EVOLUTION_INSTANCE`, leia o QR code com o telemóvel d
 (um número dedicado: a ligação não é oficial e a Meta pode bloqueá-lo) e aponte o webhook dela
 para `<APP_URL>/api/webhooks/whatsapp`, com o evento `MESSAGES_UPSERT` e o cabeçalho
 `x-webhook-secret` (e sem `base64`: a app vai buscar os ficheiros só quando os vai ler). Depois,
-dê a cada pessoa o seu número em `/admin/whatsapp`. O assistente lê texto, mensagens de voz,
-imagens e documentos (PDF, Word, texto).
+dê a cada pessoa o seu número em `/admin/whatsapp`. O assistente lê texto, imagens e documentos
+(PDF, Word, texto); às mensagens de voz responde a pedir o pedido por escrito.
 
 ### AI Office
 

@@ -1,27 +1,41 @@
 import { randomUUID } from "node:crypto";
 import type { SourceFile, TextExtractor } from "@/server/integrations/documents/text-extractor";
-import type { Embedder } from "@/server/integrations/openai/openai-embedder";
-import {
-  EMBEDDING_DIMENSIONS,
-  type KnowledgeDocument,
-  type KnowledgeHit,
-  type NewKnowledgeChunk,
-  type NewKnowledgeDocument,
+import type {
+  KnowledgeDocument,
+  KnowledgeHit,
+  NewKnowledgeChunk,
+  NewKnowledgeDocument,
 } from "@/server/models/knowledge.model";
 import type { AgentSettingRepository } from "@/server/repositories/agent-setting.repository";
 import type { KnowledgeRepository } from "@/server/repositories/knowledge.repository";
 
-/** Um vetor do tamanho certo, com `values` nas primeiras posições e zeros no resto. */
-export const vector = (...values: number[]) =>
-  Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => values[i] ?? 0);
+const STOPWORDS = new Set([
+  "qual",
+  "como",
+  "quando",
+  "para",
+  "por",
+  "com",
+  "sem",
+  "uma",
+  "que",
+  "dos",
+  "das",
+]);
 
-const cosine = (a: number[], b: number[]) => {
-  const dot = a.reduce((sum, x, i) => sum + x * b[i], 0);
-  const norm = (v: number[]) => Math.sqrt(v.reduce((sum, x) => sum + x * x, 0));
-  return dot / (norm(a) * norm(b) || 1);
-};
+/** Uma imitação grosseira do texto completo do Postgres: minúsculas, sem acentos, sem plural. */
+const terms = (text: string) =>
+  new Set(
+    text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 3 && !STOPWORDS.has(w))
+      .map((w) => w.replace(/s$/, "")),
+  );
 
-/** Base de conhecimento em memória, com a mesma procura por cosseno. */
+/** Base de conhecimento em memória, com uma procura por termos parecida com a do Postgres. */
 export class FakeKnowledgeRepository implements KnowledgeRepository {
   documents: KnowledgeDocument[] = [];
   chunks: Array<NewKnowledgeChunk & { documentId: string }> = [];
@@ -53,14 +67,22 @@ export class FakeKnowledgeRepository implements KnowledgeRepository {
     return this.documents.length < before;
   }
 
-  async search(embedding: number[], limit: number): Promise<KnowledgeHit[]> {
+  queries: string[] = [];
+
+  async search(query: string, limit: number): Promise<KnowledgeHit[]> {
+    this.queries.push(query);
+    const wanted = terms(query);
     return this.chunks
-      .map((c) => ({
-        content: c.content,
-        documentId: c.documentId,
-        documentTitle: this.documents.find((d) => d.id === c.documentId)!.title,
-        score: cosine(embedding, c.embedding),
-      }))
+      .map((c) => {
+        const found = [...terms(c.content)].filter((t) => wanted.has(t)).length;
+        return {
+          content: c.content,
+          documentId: c.documentId,
+          documentTitle: this.documents.find((d) => d.id === c.documentId)!.title,
+          score: found / (found + 1),
+        };
+      })
+      .filter((hit) => hit.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
   }
@@ -71,25 +93,6 @@ export class FakeTextExtractor implements TextExtractor {
   constructor(public text: string) {}
   async extract(_file: SourceFile) {
     return this.text;
-  }
-}
-
-/**
- * Vetores previsíveis: cada texto fica no eixo da primeira palavra-chave que tiver
- * (os textos sem nenhuma ficam num eixo à parte).
- */
-export class FakeEmbedder implements Embedder {
-  calls: string[][] = [];
-  constructor(private readonly keywords: string[]) {}
-
-  async embed(texts: string[]) {
-    this.calls.push(texts);
-    return texts.map((text) => {
-      const axis = this.keywords.findIndex((k) => text.toLowerCase().includes(k));
-      const values = Array.from({ length: this.keywords.length + 1 }, () => 0);
-      values[axis === -1 ? this.keywords.length : axis] = 1;
-      return vector(...values);
-    });
   }
 }
 

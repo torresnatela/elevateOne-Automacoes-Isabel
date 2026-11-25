@@ -1,6 +1,5 @@
 import type { LlmFileStore } from "@/server/agents/core/types";
 import type { WhatsappMessenger } from "@/server/integrations/evolution/evolution.client";
-import type { Transcriber } from "@/server/integrations/openai/openai-transcriber";
 import { AppError } from "@/server/lib/errors";
 import type { InboundMessageRepository } from "@/server/repositories/inbound-message.repository";
 
@@ -46,16 +45,6 @@ export class FakeLlmFileStore implements LlmFileStore {
   async delete(fileId: string) {
     if (this.failDeleting) throw new Error("a API dos ficheiros caiu");
     this.deleted.push(fileId);
-  }
-}
-
-/** «Transcreve» devolvendo o texto que lhe derem; guarda os áudios que recebeu. */
-export class FakeTranscriber implements Transcriber {
-  heard: string[] = [];
-  constructor(public says = "marca uma reunião com o João amanhã às 15h") {}
-  async transcribe(audio: { data: Uint8Array; mimeType: string }) {
-    this.heard.push(new TextDecoder().decode(audio.data));
-    return this.says;
   }
 }
 
