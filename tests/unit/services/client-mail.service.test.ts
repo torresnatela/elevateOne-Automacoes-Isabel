@@ -27,3 +27,30 @@ it("invoicesToCsv usa «;» e vírgula decimal, e protege os campos com «;»", 
     '"Alfa; Lda";A rever;Fatura;FT 1;;2026-11-02;F;500000000;;;100,00;23,00;123,50;EUR;ft.pdf',
   );
 });
+
+it("invoicesToCsv neutraliza texto que o Excel leria como fórmula", () => {
+  const csv = invoicesToCsv([
+    {
+      clientName: "=HYPERLINK(1)",
+      status: "EXTRAIDA",
+      docType: "FT",
+      number: "+1",
+      atcud: null,
+      issueDate: null,
+      issuerName: "@x",
+      issuerNif: null,
+      buyerName: null,
+      buyerNif: null,
+      netTotal: -5,
+      vatTotal: null,
+      total: null,
+      currency: "EUR",
+      fileName: "f.pdf",
+    } as InvoiceRecord,
+  ]);
+  const row = csv.trim().split("\r\n")[1];
+  expect(row.startsWith("'=HYPERLINK(1);")).toBe(true);
+  expect(row).toContain(";'+1;");
+  expect(row).toContain(";'@x;");
+  expect(row).toContain(";-5,00;");
+});

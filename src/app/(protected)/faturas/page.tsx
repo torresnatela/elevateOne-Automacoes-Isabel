@@ -22,13 +22,16 @@ export default async function InvoicesPage({
   const parsed = invoiceFilterSchema.safeParse(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v)),
   );
-  const filter = parsed.success ? parsed.data : {};
+  // Um filtro inválido não se ignora (mostrava tudo): avisa e não procura.
+  const filterError = parsed.success
+    ? null
+    : "Filtro inválido: confira o cliente, o estado e as datas.";
   const query = new URLSearchParams(
     Object.entries(params).filter((e): e is [string, string] => Boolean(e[1])),
   ).toString();
 
   const [invoices, clients, mailboxes] = await Promise.all([
-    clientMailService.listInvoices(filter),
+    parsed.success ? clientMailService.listInvoices(parsed.data) : Promise.resolve([]),
     clientService.list({ includeInactive: true }),
     clientMailService.mailboxes(),
   ]);
@@ -95,10 +98,18 @@ export default async function InvoicesPage({
         <button type="submit" className="botao">
           Filtrar
         </button>
-        <a className="botao fantasma" href={`/api/invoices/export?${query}`}>
-          Exportar CSV
-        </a>
+        {!filterError && (
+          <a className="botao fantasma" href={`/api/invoices/export?${query}`}>
+            Exportar CSV
+          </a>
+        )}
       </form>
+
+      {filterError && (
+        <p role="alert" className="mensagem erro">
+          {filterError}
+        </p>
+      )}
 
       <InvoicesTable
         key={query}

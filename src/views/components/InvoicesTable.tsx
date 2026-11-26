@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   DOC_TYPE_LABELS,
   INVOICE_DOC_TYPES,
@@ -43,6 +43,10 @@ export function InvoicesTable({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ error: boolean; text: string } | null>(null);
 
+  // Depois de um `router.refresh()` (nova sincronização), a lista do servidor substitui a de cá;
+  // a fatura que está a ser revista mantém-se aberta.
+  useEffect(() => setInvoices(initialInvoices), [initialInvoices]);
+
   async function patch(id: string, body: Record<string, unknown>, done: string) {
     setBusy(true);
     setStatus(null);
@@ -64,9 +68,18 @@ export function InvoicesTable({
     }
   }
 
+  /** Guarda as correções do formulário; com «Confirmar» ou «Rejeitar», muda também o estado. */
   function save(e: FormEvent<HTMLFormElement>, id: string) {
     e.preventDefault();
     const d = new FormData(e.currentTarget);
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const nextStatus = submitter?.value as InvoiceStatus | undefined;
+    const done =
+      nextStatus === "CONFIRMADA"
+        ? "Fatura confirmada."
+        : nextStatus === "REJEITADA"
+          ? "Fatura rejeitada."
+          : "Fatura corrigida.";
     void patch(
       id,
       {
@@ -81,8 +94,9 @@ export function InvoicesTable({
         netTotal: numberOrNull(d.get("netTotal")),
         vatTotal: numberOrNull(d.get("vatTotal")),
         total: numberOrNull(d.get("total")),
+        ...(nextStatus ? { status: nextStatus } : {}),
       },
-      "Fatura corrigida.",
+      done,
     );
   }
 
@@ -135,13 +149,6 @@ export function InvoicesTable({
                 busy={busy}
                 onEdit={() => setEditing(editing === i.id ? null : i.id)}
                 onSave={(e) => save(e, i.id)}
-                onStatus={(s) =>
-                  void patch(
-                    i.id,
-                    { status: s },
-                    s === "CONFIRMADA" ? "Fatura confirmada." : "Fatura rejeitada.",
-                  )
-                }
               />
             ))}
           </tbody>
@@ -159,7 +166,6 @@ function InvoiceRows({
   busy,
   onEdit,
   onSave,
-  onStatus,
 }: {
   invoice: InvoiceView;
   showClient: boolean;
@@ -168,7 +174,6 @@ function InvoiceRows({
   busy: boolean;
   onEdit: () => void;
   onSave: (e: FormEvent<HTMLFormElement>) => void;
-  onStatus: (s: InvoiceStatus) => void;
 }) {
   const input = (name: keyof InvoiceView, label: string, type = "text") => (
     <div className="campo">
@@ -277,19 +282,22 @@ function InvoiceRows({
                 <button type="submit" className="botao" disabled={busy}>
                   Guardar correções
                 </button>
+                {/* Confirmar e Rejeitar também guardam as correções que estiverem no formulário. */}
                 <button
-                  type="button"
+                  type="submit"
+                  name="status"
+                  value="CONFIRMADA"
                   className="botao primario"
                   disabled={busy}
-                  onClick={() => onStatus("CONFIRMADA")}
                 >
                   Confirmar
                 </button>
                 <button
-                  type="button"
+                  type="submit"
+                  name="status"
+                  value="REJEITADA"
                   className="botao fantasma perigo"
                   disabled={busy}
-                  onClick={() => onStatus("REJEITADA")}
                 >
                   Rejeitar
                 </button>

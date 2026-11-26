@@ -27,6 +27,10 @@ export interface SyncOptions {
   /** As imagens mais pequenas do que isto são logótipos de assinatura: ficam de fora. */
   minImageBytes: number;
   maxAttachmentsPerEmail: number;
+  /** Quantos bytes de anexos vão, no máximo, num só pedido ao modelo (a API aceita 32 MB, já em base64). */
+  maxRequestBytes: number;
+  /** Quantos ids se pedem ao Gmail por procura; se vierem todos, a procura não ficou completa. */
+  maxDiscovered: number;
 }
 
 export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
@@ -36,6 +40,8 @@ export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   maxAttachmentBytes: 10 * 1024 * 1024,
   minImageBytes: 20 * 1024,
   maxAttachmentsPerEmail: 10,
+  maxRequestBytes: 18 * 1024 * 1024,
+  maxDiscovered: 2000,
 };
 
 export interface AccountReport {
@@ -77,6 +83,39 @@ function pickClient(candidates: Client[], address: string): Client | null {
     candidates.find((c) => c.emailDomains.includes(address.split("@").pop() ?? "")) ??
     null
   );
+}
+
+/**
+ * Os ids do Gmail crescem com o tempo de chegada: ordená-los pelo valor (hexadecimal) põe
+ * por ordem os resultados de procuras diferentes, que o Gmail não ordena entre si.
+ */
+export function oldestFirst(ids: string[]): string[] {
+  const value = (id: string) => (/^[0-9a-f]+$/i.test(id) ? BigInt(`0x${id}`) : 0n);
+  return [...ids].sort((a, b) => {
+    const [x, y] = [value(a), value(b)];
+    return x < y ? -1 : x > y ? 1 : a.localeCompare(b);
+  });
+}
+
+/** Junta os anexos em grupos que cabem num pedido ao modelo. */
+export function batchAttachments<T extends { data: Uint8Array }>(
+  files: T[],
+  maxBytes: number,
+): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let size = 0;
+  for (const file of files) {
+    if (current.length && size + file.data.byteLength > maxBytes) {
+      batches.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(file);
+    size += file.data.byteLength;
+  }
+  if (current.length || batches.length === 0) batches.push(current);
+  return batches;
 }
 
 const isUniqueViolation = (err: unknown) =>
@@ -151,12 +190,16 @@ export class ClientMailSyncService {
       }
       const workspace = await this.deps.google.workspaceFor(account.userId);
       const ids = new Set<string>();
-      for (const query of buildQueries(clients, since, this.options.sendersPerQuery))
-        for (const id of await workspace.listMessageIds(query, 500)) ids.add(id);
+      let truncated = false;
+      for (const query of buildQueries(clients, since, this.options.sendersPerQuery)) {
+        const found = await workspace.listMessageIds(query, this.options.maxDiscovered);
+        if (found.length >= this.options.maxDiscovered) truncated = true;
+        for (const id of found) ids.add(id);
+      }
 
       const seen = await this.deps.mail.seenIds(account.id, [...ids]);
-      // O Gmail devolve do mais recente para trás: lê-se do mais antigo para a frente.
-      const fresh = [...ids].filter((id) => !seen.has(id)).reverse();
+      // Lê-se do mais antigo para a frente, juntando por ordem os resultados de todas as procuras.
+      const fresh = oldestFirst([...ids].filter((id) => !seen.has(id)));
       const batch = fresh.slice(0, Math.max(0, budget));
       report.pending = fresh.length - batch.length;
 
@@ -174,7 +217,8 @@ export class ClientMailSyncService {
         }
       }
       // Só se avança a marca quando tudo até agora ficou tratado.
-      const done = failures === 0 && report.pending === 0;
+      // Uma procura que devolveu o máximo pode ter deixado emails mais antigos por descobrir.
+      const done = failures === 0 && report.pending === 0 && !truncated;
       await this.saveState(
         account.id,
         startedAt,
@@ -227,15 +271,25 @@ export class ClientMailSyncService {
       attachments.push({ partId: a.partId, fileName: a.fileName, mimeType: type, data: file.data });
     }
 
-    const extraction = await extractor.extract({
-      from: email.from,
-      subject: email.subject,
-      date: email.date,
-      body: email.body,
-      clientName: client.name,
-      clientNif: client.nif,
-      attachments,
-    });
+    // Muitos anexos grandes não cabem num só pedido: lê-se em grupos e juntam-se as leituras.
+    const results = [];
+    for (const group of batchAttachments(attachments, this.options.maxRequestBytes))
+      results.push(
+        await extractor.extract({
+          from: email.from,
+          subject: email.subject,
+          date: email.date,
+          body: email.body,
+          clientName: client.name,
+          clientNif: client.nif,
+          attachments: group,
+        }),
+      );
+    const extraction = {
+      ...results[0],
+      actionNeeded: results.some((r) => r.actionNeeded),
+      invoices: results.flatMap((r) => r.invoices),
+    };
 
     const invoices: NewInvoice[] = extraction.invoices.map(({ partId, ...inv }) => {
       const file = attachments.find((a) => a.partId === partId)!;

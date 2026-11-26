@@ -11,6 +11,24 @@ describe("PrismaGoogleAccountRepository", () => {
   const newUser = () =>
     new PrismaUserRepository(prisma).create({ name: "Isabel", email: "i@e.pt", passwordHash: "h" });
 
+  it("ligar outra caixa recomeça a leitura das faturas; ligar a mesma não", async () => {
+    const user = await newUser();
+    const save = (email: string) =>
+      repo.save({ userId: user.id, email, refreshTokenEncrypted: "x", scopes: "" });
+    const account = await save("a@x.pt");
+    await prisma.mailSyncState.create({
+      data: { googleAccountId: account.id, syncedUntil: new Date() },
+    });
+    await prisma.mailSeenMessage.create({
+      data: { googleAccountId: account.id, gmailMessageId: "m1" },
+    });
+    await save("A@x.pt");
+    expect(await prisma.mailSyncState.count()).toBe(1);
+    await save("b@x.pt");
+    expect(await prisma.mailSyncState.count()).toBe(0);
+    expect(await prisma.mailSeenMessage.count()).toBe(0);
+  });
+
   it("guarda uma conta por utilizador; ligar de novo substitui a anterior", async () => {
     const user = await newUser();
     await repo.save({

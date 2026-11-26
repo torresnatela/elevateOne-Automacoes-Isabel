@@ -107,8 +107,10 @@ export function reviewReasons(invoice: ExtractedInvoice): string[] {
     ["emitente", invoice.issuerNif],
     ["adquirente", invoice.buyerNif],
   ] as const) {
-    // Um NIF estrangeiro (com letras) não se valida pelas regras portuguesas.
-    if (nif && /^\d+$/.test(nif) && !isValidNif(nif)) reasons.push(`NIF do ${label} inválido.`);
+    // Tira o prefixo PT e os separadores; um NIF estrangeiro (com letras) não se valida pelas regras portuguesas.
+    const plain = nif?.replace(/^PT/i, "").replace(/[\s.\-]/g, "");
+    if (plain && /^\d+$/.test(plain) && !isValidNif(plain))
+      reasons.push(`NIF do ${label} inválido.`);
   }
   if (!invoice.issuerNif) reasons.push("Falta o NIF do emitente.");
   if (invoice.total === null) reasons.push("Falta o total.");
@@ -133,6 +135,13 @@ export function directionFor(
   if (invoice.buyerNif && normalizeNif(invoice.buyerNif) === clientNif) return "COMPRA";
   if (invoice.issuerNif && normalizeNif(invoice.issuerNif) === clientNif) return "VENDA";
   return "DESCONHECIDA";
+}
+
+/** Um dia real do calendário em AAAA-MM-DD: «2026-02-31» ou «2026-13-01» não passam. */
+export function isRealDay(v: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
 /** O endereço de um cabeçalho From: «Ana <ana@x.pt>» → «ana@x.pt». */

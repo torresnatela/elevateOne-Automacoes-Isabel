@@ -46,10 +46,23 @@ export class PrismaGoogleAccountRepository implements GoogleAccountRepository {
 
   async save(account: GoogleAccountData) {
     const { userId, ...data } = account;
-    return this.db.googleAccount.upsert({
-      where: { userId },
-      update: data,
-      create: { userId, ...data },
+    return this.db.$transaction(async (tx) => {
+      const previous = await tx.googleAccount.findUnique({ where: { userId } });
+      // Outra caixa no lugar da anterior: o agente de faturas começa do zero nela, e os emails
+      // já guardados deixam de apontar para esta conta (os anexos estão na caixa antiga).
+      if (previous && previous.email.toLowerCase() !== data.email.toLowerCase()) {
+        await tx.mailSyncState.deleteMany({ where: { googleAccountId: previous.id } });
+        await tx.mailSeenMessage.deleteMany({ where: { googleAccountId: previous.id } });
+        await tx.clientEmail.updateMany({
+          where: { googleAccountId: previous.id },
+          data: { googleAccountId: null },
+        });
+      }
+      return tx.googleAccount.upsert({
+        where: { userId },
+        update: data,
+        create: { userId, ...data },
+      });
     });
   }
 

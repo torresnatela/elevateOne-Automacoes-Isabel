@@ -51,7 +51,7 @@ it("readableType reconhece pelo nome o que vem como octet-stream", () => {
   expect(readableType({ fileName: "a.zip", mimeType: "application/zip" })).toBeNull();
 });
 
-it("AnthropicInvoiceExtractor manda o PDF ao modelo e força a ferramenta", async () => {
+it("AnthropicInvoiceExtractor manda o PDF ao modelo, com a ferramenta em auto (o Sonnet 5.5 recusa forçar)", async () => {
   const create = vi.fn().mockResolvedValue({
     content: [
       {
@@ -81,7 +81,24 @@ it("AnthropicInvoiceExtractor manda o PDF ao modelo e força a ferramenta", asyn
   expect(result.invoices).toHaveLength(1);
   const params = create.mock.calls[0][0];
   expect(params.model).toBe("modelo-x");
-  expect(params.tool_choice).toEqual({ type: "tool", name: "registar_email" });
+  expect(params.tool_choice).toEqual({ type: "auto" });
+  expect(params.tools[0].name).toBe("registar_email");
   const types = params.messages[0].content.map((b: { type: string }) => b.type);
   expect(types.filter((t: string) => t === "document")).toHaveLength(1);
+});
+
+it("AnthropicInvoiceExtractor falha se o modelo não chamar a ferramenta", async () => {
+  const create = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "Olá" }] });
+  const extractor = new AnthropicInvoiceExtractor({ create }, "m");
+  await expect(
+    extractor.extract({
+      from: "a@x.pt",
+      subject: "s",
+      date: "",
+      body: "",
+      clientName: "X",
+      clientNif: null,
+      attachments: [],
+    }),
+  ).rejects.toMatchObject({ code: "EXTRACTOR_NO_OUTPUT" });
 });

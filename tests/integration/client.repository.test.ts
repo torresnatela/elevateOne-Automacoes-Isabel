@@ -29,6 +29,24 @@ describe("PrismaClientRepository", () => {
     expect((await repo.list()).map((c) => c.name)).toEqual(["B", "C"]);
   });
 
+  it("procura por NIF só quando a procura parece um NIF", async () => {
+    await repo.create(data({ name: "Loja 2", nif: "500000000" }));
+    await repo.create(data({ name: "Outra", nif: "123456789" }));
+    expect((await repo.list({ query: "Loja 2" })).map((c) => c.name)).toEqual(["Loja 2"]);
+    expect((await repo.list({ query: "PT 123 456" })).map((c) => c.name)).toEqual(["Outra"]);
+  });
+
+  it("dois clientes ao mesmo tempo com o mesmo email: só um fica", async () => {
+    const results = await Promise.allSettled([
+      repo.create(data({ name: "A", contactEmails: ["x@x.pt"] })),
+      repo.create(data({ name: "B", contactEmails: ["x@x.pt"] })),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((r) => r.status === "rejected")).toMatchObject({
+      reason: { code: "CLIENT_EMAIL_TAKEN" },
+    });
+  });
+
   it("update devolve null e setActive false para um id que não existe", async () => {
     const missing = "00000000-0000-0000-0000-000000000000";
     await expect(repo.update(missing, data({}))).resolves.toBeNull();

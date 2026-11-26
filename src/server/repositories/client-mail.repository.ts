@@ -58,7 +58,7 @@ export type InvoicePatch = Partial<
     | "vatTotal"
     | "total"
   >
-> & { status?: InvoiceStatus; reviewedById?: string };
+> & { status?: InvoiceStatus; reviewReasons?: string[]; reviewedById?: string };
 
 /** Onde está o anexo de uma fatura: a caixa, o email e a parte. */
 export interface InvoiceSource {
@@ -98,8 +98,15 @@ export interface ClientMailRepository {
   listEmails(clientId: string, limit?: number): Promise<ClientEmailRecord[]>;
   listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]>;
   findInvoiceSource(id: string): Promise<InvoiceSource | null>;
-  /** `null` se a fatura não existe. */
-  updateInvoice(id: string, patch: InvoicePatch): Promise<InvoiceRecord | null>;
+  /**
+   * `null` se a fatura não existe. Com `onlyIfStatus`, só escreve se o estado guardado ainda for
+   * esse (senão devolve a fatura como está): outra pessoa pode tê-la confirmado entretanto.
+   */
+  updateInvoice(
+    id: string,
+    patch: InvoicePatch,
+    onlyIfStatus?: InvoiceStatus,
+  ): Promise<InvoiceRecord | null>;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -107,6 +114,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const toNumber = (d: Prisma.Decimal | null) => (d === null ? null : Number(d));
 const toDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 const fromDay = (s: string | null) => (s ? new Date(`${s}T00:00:00.000Z`) : null);
+
+/** Um intervalo de dias (`to` inclui o dia todo quando se compara com um instante). */
+const range = (from?: Date, to?: Date, instant = false) => ({
+  ...(from ? { gte: from } : {}),
+  ...(to ? (instant ? { lt: new Date(to.getTime() + 24 * 60 * 60_000) } : { lte: to }) : {}),
+});
 
 const INVOICE_INCLUDE = {
   client: { select: { name: true } },
@@ -268,12 +281,13 @@ export class PrismaClientMailRepository implements ClientMailRepository {
       where: {
         ...(filter.clientId ? { clientId: filter.clientId } : {}),
         ...(filter.status ? { status: filter.status } : {}),
+        // Sem data de emissão, conta a data em que o email chegou.
         ...(filter.from || filter.to
           ? {
-              issueDate: {
-                ...(filter.from ? { gte: filter.from } : {}),
-                ...(filter.to ? { lte: filter.to } : {}),
-              },
+              OR: [
+                { issueDate: range(filter.from, filter.to) },
+                { issueDate: null, email: { receivedAt: range(filter.from, filter.to, true) } },
+              ],
             }
           : {}),
       },
@@ -309,23 +323,19 @@ export class PrismaClientMailRepository implements ClientMailRepository {
     };
   }
 
-  async updateInvoice(id: string, patch: InvoicePatch) {
+  async updateInvoice(id: string, patch: InvoicePatch, onlyIfStatus?: InvoiceStatus) {
     if (!UUID_RE.test(id)) return null;
     const { issueDate, reviewedById, ...rest } = patch;
-    try {
-      const row = await this.db.invoice.update({
-        where: { id },
-        data: {
-          ...rest,
-          ...(issueDate !== undefined ? { issueDate: fromDay(issueDate) } : {}),
-          ...(reviewedById ? { reviewedById, reviewedAt: new Date() } : {}),
-        },
-        include: INVOICE_INCLUDE,
-      });
-      return toInvoice(row);
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") return null;
-      throw err;
-    }
+    const data: Prisma.InvoiceUpdateManyMutationInput = {
+      ...rest,
+      ...(issueDate !== undefined ? { issueDate: fromDay(issueDate) } : {}),
+      ...(reviewedById ? { reviewedById, reviewedAt: new Date() } : {}),
+    };
+    await this.db.invoice.updateMany({
+      where: { id, ...(onlyIfStatus ? { status: onlyIfStatus } : {}) },
+      data,
+    });
+    const row = await this.db.invoice.findUnique({ where: { id }, include: INVOICE_INCLUDE });
+    return row ? toInvoice(row) : null;
   }
 }

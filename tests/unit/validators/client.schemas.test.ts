@@ -28,6 +28,9 @@ describe("clientSchema", () => {
     [{ name: "X", postalCode: "1000" }, "código postal inválido"],
     [{ name: "X", caePrincipal: "12" }, "CAE inválido"],
     [{ name: "X", vatRegime: "OUTRO" }, "regime de IVA desconhecido"],
+    [{ name: "X", emailDomains: ["gmail.com"] }, "domínio de correio público"],
+    [{ name: "X", emailDomains: ["a..pt"] }, "domínio com parte vazia"],
+    [{ name: "X", emailDomains: ["-x.pt"] }, "domínio começa por hífen"],
   ])("rejeita %j (%s)", (input: unknown, _caso: string) => {
     expect(clientSchema.safeParse(input).success).toBe(false);
   });

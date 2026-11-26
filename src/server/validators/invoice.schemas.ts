@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { INVOICE_DOC_TYPES, INVOICE_STATUSES } from "@/server/models/client-mail.model";
+import { INVOICE_DOC_TYPES, INVOICE_STATUSES, isRealDay } from "@/server/models/client-mail.model";
+
+const dayString = z.string().refine(isRealDay, "Data inválida.");
 
 const text = z
   .string()
@@ -14,10 +16,7 @@ export const invoicePatchSchema = z
     docType: z.enum(INVOICE_DOC_TYPES),
     number: text,
     atcud: text,
-    issueDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .nullable(),
+    issueDate: dayString.nullable(),
     issuerName: text,
     issuerNif: text,
     buyerName: text,
@@ -29,10 +28,7 @@ export const invoicePatchSchema = z
   })
   .partial();
 
-const day = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
-  .transform((v) => new Date(`${v}T00:00:00.000Z`));
+const day = dayString.transform((v) => new Date(`${v}T00:00:00.000Z`));
 
 export const invoiceFilterSchema = z.object({
   clientId: z.string().uuid().optional(),

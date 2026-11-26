@@ -1,4 +1,5 @@
 import {
+  isRealDay,
   addressOf,
   directionFor,
   reviewReasons,
@@ -35,8 +36,14 @@ describe("reviewReasons", () => {
     [{ total: 130 }, "Base + IVA"],
     [{ vatBreakdown: [{ rate: 23, base: 100, vat: 20 }] }, "IVA por taxa"],
     [{ issueDate: null }, "Falta a data"],
+    [{ issuerNif: "PT 500 000 001" }, "NIF do emitente inválido"],
+    [{ issuerNif: "500.000.001" }, "NIF do emitente inválido"],
   ])("assinala %j", (over, reason) => {
     expect(reviewReasons(invoice(over)).join(" ")).toContain(reason);
+  });
+
+  it("aceita um NIF válido escrito com PT e separadores", () => {
+    expect(reviewReasons(invoice({ issuerNif: "PT 500 000 000" }))).toEqual([]);
   });
 
   it("não valida pelas regras portuguesas um NIF estrangeiro", () => {
@@ -53,4 +60,11 @@ it("directionFor sabe se o cliente comprou ou vendeu", () => {
 it("addressOf tira o endereço do cabeçalho From", () => {
   expect(addressOf("Ana Silva <Ana@Empresa.pt>")).toBe("ana@empresa.pt");
   expect(addressOf("ana@empresa.pt")).toBe("ana@empresa.pt");
+});
+
+it("isRealDay só aceita dias que existem", () => {
+  expect(isRealDay("2024-02-29")).toBe(true);
+  expect(isRealDay("2026-02-29")).toBe(false);
+  expect(isRealDay("2026-13-01")).toBe(false);
+  expect(isRealDay("02/11/2026")).toBe(false);
 });

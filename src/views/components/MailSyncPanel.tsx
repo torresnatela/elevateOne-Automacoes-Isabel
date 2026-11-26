@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/views/lib/api";
 
 export interface MailboxView {
@@ -9,6 +9,10 @@ export interface MailboxView {
   lastRunAt: string | null;
   lastError: string | null;
 }
+
+/** De quanto em quanto tempo se pergunta se a sincronização acabou, e até quando. */
+const POLL_MS = 10_000;
+const POLL_MAX_MS = 6 * 60_000;
 
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" }) : "nunca";
@@ -19,6 +23,36 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
 
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ao sair da página, deixa de perguntar.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  /** Pergunta até todas as caixas terem uma corrida nova (ou o tempo acabar), e atualiza a página. */
+  function waitForRun(before: Map<string, string | null>, startedAt: number) {
+    timer.current = setTimeout(async () => {
+      let finished = Date.now() - startedAt > POLL_MAX_MS;
+      try {
+        const { mailboxes: now } = await api<{ mailboxes: MailboxView[] }>(
+          "/api/clients/sync",
+          "GET",
+        );
+        finished ||= now.every(
+          (m) => m.lastRunAt !== null && m.lastRunAt !== before.get(m.mailbox),
+        );
+      } catch {
+        // Uma falha de rede numa pergunta não para a espera.
+      }
+      if (!finished) return waitForRun(before, startedAt);
+      setMessage({ error: false, text: "Sincronização concluída." });
+      router.refresh();
+    }, POLL_MS);
+  }
+
   async function syncNow() {
     setBusy(true);
     setMessage(null);
@@ -26,9 +60,10 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
       await api("/api/clients/sync", "POST");
       setMessage({
         error: false,
-        text: "O agente começou a ler os emails. Os resultados aparecem dentro de uns minutos.",
+        text: "O agente começou a ler os emails. A página atualiza-se quando acabar.",
       });
-      setTimeout(() => router.refresh(), 30_000);
+      if (timer.current) clearTimeout(timer.current);
+      waitForRun(new Map(mailboxes.map((m) => [m.mailbox, m.lastRunAt])), Date.now());
     } catch (e) {
       setMessage({ error: true, text: (e as Error).message });
     } finally {

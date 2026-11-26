@@ -33,6 +33,10 @@ export class FakeClientRepository implements ClientRepository {
     );
   }
 
+  async findByContactEmails(emails: string[]) {
+    return this.clients.filter((c) => c.contactEmails.some((e) => emails.includes(e)));
+  }
+
   async create(data: ClientData) {
     const now = new Date();
     const client: Client = {

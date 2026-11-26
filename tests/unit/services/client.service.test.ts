@@ -35,6 +35,14 @@ describe("ClientService", () => {
     ).resolves.toMatchObject({ name: "A2" });
   });
 
+  it("um email de um cliente desativado também não pode ir para outro", async () => {
+    const a = await service.create(data({ name: "A", contactEmails: ["a@x.pt"] }));
+    await service.setActive(a.id, false);
+    await expect(
+      service.create(data({ name: "B", contactEmails: ["a@x.pt"] })),
+    ).rejects.toMatchObject({ code: "CLIENT_EMAIL_TAKEN" });
+  });
+
   it("dá 404 a um cliente que não existe", async () => {
     await expect(service.get("nada")).rejects.toMatchObject({ status: 404 });
     await expect(service.setActive("nada", false)).rejects.toMatchObject({ status: 404 });

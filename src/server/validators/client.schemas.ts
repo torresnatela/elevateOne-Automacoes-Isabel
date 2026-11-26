@@ -16,6 +16,37 @@ const optionalText = (max: number) =>
     .nullish()
     .transform((v) => (v ? v : null));
 
+/** Domínios de correio público: um remetente de lá não identifica um cliente. */
+export const FREE_MAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "hotmail.pt",
+  "outlook.com",
+  "outlook.pt",
+  "live.com",
+  "live.com.pt",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.com.br",
+  "icloud.com",
+  "me.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+  "gmx.com",
+  "sapo.pt",
+  "iol.pt",
+  "clix.pt",
+  "netcabo.pt",
+  "mail.telepac.pt",
+  "uol.com.br",
+  "bol.com.br",
+]);
+
+/** Cada parte começa e acaba numa letra ou algarismo; a última tem só letras. */
+const DOMAIN_RE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
+
 const uniqueLower = (list: string[]) => [...new Set(list.map((v) => v.trim().toLowerCase()))];
 
 export const clientSchema = z.object({
@@ -37,7 +68,15 @@ export const clientSchema = z.object({
         .string()
         .trim()
         .transform((v) => v.replace(/^@/, "").toLowerCase())
-        .pipe(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, "Domínio inválido.")),
+        .pipe(
+          z
+            .string()
+            .regex(DOMAIN_RE, "Domínio inválido.")
+            .refine(
+              (d) => !FREE_MAIL_DOMAINS.has(d),
+              "Domínio de correio público: use os endereços exatos do cliente.",
+            ),
+        ),
     )
     .max(10)
     .default([])

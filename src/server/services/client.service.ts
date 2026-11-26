@@ -1,6 +1,9 @@
 import { AppError } from "@/server/lib/errors";
 import type { Client, ClientData } from "@/server/models/client.model";
-import type { ClientRepository } from "@/server/repositories/client.repository";
+import {
+  ClientEmailTakenError,
+  type ClientRepository,
+} from "@/server/repositories/client.repository";
 
 const notFound = () => new AppError("Cliente não encontrado.", 404, "CLIENT_NOT_FOUND");
 
@@ -41,18 +44,12 @@ export class ClientService {
       if (owner && owner.id !== selfId)
         throw new AppError(`Esse NIF já é do cliente ${owner.name}.`, 409, "NIF_TAKEN");
     }
-    if (data.contactEmails.length) {
-      const owners = await this.clients.findByAddresses(data.contactEmails);
-      for (const owner of owners) {
-        if (owner.id === selfId) continue;
-        const shared = data.contactEmails.find((e) => owner.contactEmails.includes(e));
-        if (shared)
-          throw new AppError(
-            `O email ${shared} já é do cliente ${owner.name}.`,
-            409,
-            "CLIENT_EMAIL_TAKEN",
-          );
-      }
+    // Conta também com os desativados: ao reativar um, não pode haver outro com o mesmo email.
+    // O repositório volta a verificar na mesma transação da escrita (pedidos ao mesmo tempo).
+    for (const owner of await this.clients.findByContactEmails(data.contactEmails)) {
+      if (owner.id === selfId) continue;
+      const shared = data.contactEmails.find((e) => owner.contactEmails.includes(e));
+      if (shared) throw new ClientEmailTakenError(shared, owner.name);
     }
   }
 }

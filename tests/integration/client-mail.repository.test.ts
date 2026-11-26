@@ -101,6 +101,23 @@ describe("PrismaClientMailRepository", () => {
     ).resolves.toBeNull();
   });
 
+  it("sem data de emissão, o filtro de datas usa a data em que o email chegou", async () => {
+    const { account, client } = await fixtures();
+    await repo.saveEmail(newEmail(client.id, account.id), [{ ...newInvoice, issueDate: null }]);
+    const nov24 = new Date("2026-11-24T00:00:00Z");
+    expect(await repo.listInvoices({ from: nov24, to: nov24 })).toHaveLength(1);
+    expect(await repo.listInvoices({ from: new Date("2026-11-25T00:00:00Z") })).toHaveLength(0);
+  });
+
+  it("a escrita condicionada ao estado não apaga uma confirmação feita entretanto", async () => {
+    const { account, client } = await fixtures();
+    await repo.saveEmail(newEmail(client.id, account.id), [{ ...newInvoice, status: "A_REVER" }]);
+    const [invoice] = await repo.listInvoices({});
+    await repo.updateInvoice(invoice.id, { status: "CONFIRMADA" });
+    const after = await repo.updateInvoice(invoice.id, { status: "EXTRAIDA" }, "A_REVER");
+    expect(after?.status).toBe("CONFIRMADA");
+  });
+
   it("o mesmo email (Message-ID) não se guarda duas vezes", async () => {
     const { account, client } = await fixtures();
     await repo.saveEmail(newEmail(client.id, account.id), []);

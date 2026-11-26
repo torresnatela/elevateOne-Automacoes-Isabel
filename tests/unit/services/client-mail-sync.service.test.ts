@@ -1,6 +1,11 @@
 import type { EmailMessage } from "@/server/integrations/google/workspace";
 import type { Client } from "@/server/models/client.model";
-import { ClientMailSyncService, buildQueries } from "@/server/services/client-mail-sync.service";
+import {
+  ClientMailSyncService,
+  batchAttachments,
+  buildQueries,
+  oldestFirst,
+} from "@/server/services/client-mail-sync.service";
 import { FakeClientRepository } from "../../setup/fake-client.repository";
 import { FakeClientMailRepository, FakeInvoiceExtractor } from "../../setup/fake-client-mail";
 import { FakeGoogleWorkspace } from "../../setup/fake-google";
@@ -81,6 +86,8 @@ async function setup() {
       maxAttachmentBytes: 10_000_000,
       minImageBytes: 20_000,
       maxAttachmentsPerEmail: 10,
+      maxRequestBytes: 3,
+      maxDiscovered: 100,
     },
   );
   const addEmail = (user: string, e: EmailMessage) => {
@@ -204,4 +211,42 @@ it("buildQueries junta os remetentes em grupos, com a data", () => {
     "from:(a@x.pt OR b@x.pt) after:1793491200 -in:sent -in:chats",
     "from:(@y.pt OR c@z.pt) after:1793491200 -in:sent -in:chats",
   ]);
+});
+
+it("oldestFirst ordena os ids do Gmail pelo valor, juntando procuras diferentes", () => {
+  expect(oldestFirst(["18f2", "18a0", "1900", "18f1"])).toEqual(["18a0", "18f1", "18f2", "1900"]);
+});
+
+it("batchAttachments junta os anexos em grupos que cabem num pedido", () => {
+  const f = (n: number) => ({ data: new Uint8Array(n) });
+  expect(batchAttachments([f(5), f(4), f(3), f(9)], 9).map((g) => g.length)).toEqual([2, 1, 1]);
+  expect(batchAttachments([], 9)).toEqual([[]]);
+});
+
+it("um email com anexos que não cabem num pedido é lido em vários, e as faturas juntam-se", async () => {
+  const { service, addEmail, extractor, mail } = await setup();
+  addEmail(
+    "u1",
+    email("m1", {
+      attachments: [
+        { partId: "1", fileName: "a.pdf", mimeType: "application/pdf", size: 50_000 },
+        { partId: "2", fileName: "b.pdf", mimeType: "application/pdf", size: 50_000 },
+      ],
+    }),
+  );
+  await service.run();
+  expect(extractor.calls.map((c) => c.attachments.map((a) => a.partId))).toEqual([["1"], ["2"]]);
+  expect(mail.emails).toHaveLength(1);
+  expect(mail.invoices.map((i) => i.attachmentPartId)).toEqual(["1", "2"]);
+});
+
+it("não dá a caixa por lida quando a procura devolve o máximo de ids", async () => {
+  const { service, addEmail, mail, workspaces } = await setup();
+  addEmail("u1", email("m1"));
+  workspaces.get("u1")!.listMessageIds = async () =>
+    Array.from({ length: 100 }, (_, i) => (i === 0 ? "m1" : `x${i}`));
+  workspaces.get("u1")!.getEmail = async (id: string) =>
+    email(id, { from: "alguem@fora.pt", attachments: [] });
+  await service.run();
+  expect(mail.states.get("acc1")?.syncedUntil).toBeNull();
 });

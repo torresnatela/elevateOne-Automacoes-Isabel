@@ -44,14 +44,15 @@ export class ClientMailService {
   async updateInvoice(id: string, patch: InvoicePatch, userId: string): Promise<InvoiceRecord> {
     const updated = await this.mail.updateInvoice(id, { ...patch, reviewedById: userId });
     if (!updated) throw notFound();
-    // Depois de uma correção sem estado escolhido, volta a ver-se se ainda há o que rever.
-    if (!patch.status && updated.status !== "CONFIRMADA" && updated.status !== "REJEITADA") {
-      const reasons = reviewReasons({ ...updated, confidence: 1 });
-      const status = reasons.length ? "A_REVER" : "EXTRAIDA";
-      if (status !== updated.status)
-        return (await this.mail.updateInvoice(id, { status })) ?? updated;
-    }
-    return updated;
+    if (updated.status === "CONFIRMADA" || updated.status === "REJEITADA") return updated;
+    // Depois de uma correção, volta a ver-se o que ainda há para rever (e guarda-se o porquê).
+    const reasons = reviewReasons({ ...updated, confidence: 1 });
+    const status = reasons.length ? "A_REVER" : "EXTRAIDA";
+    // Só se escreve se ninguém mudou o estado entretanto.
+    return (
+      (await this.mail.updateInvoice(id, { status, reviewReasons: reasons }, updated.status)) ??
+      updated
+    );
   }
 
   /** O ficheiro da fatura, descarregado na hora da caixa Gmail onde chegou. */
@@ -87,6 +88,10 @@ export class ClientMailService {
   }
 }
 
+/** Um texto que o Excel leria como fórmula (=, +, -, @, tab, CR) passa a texto com um apóstrofo. */
+const safeText = (v: string | null | undefined) =>
+  v && /^[=+\-@\t\r]/.test(v) ? `'${v}` : (v ?? "");
+
 const csvCell = (v: unknown) => {
   const s = v === null || v === undefined ? "" : String(v);
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -114,21 +119,21 @@ export function invoicesToCsv(invoices: InvoiceRecord[]): string {
   ];
   const rows = invoices.map((i) =>
     [
-      i.clientName,
+      safeText(i.clientName),
       STATUS_LABELS[i.status],
       DOC_TYPE_LABELS[i.docType],
-      i.number,
-      i.atcud,
+      safeText(i.number),
+      safeText(i.atcud),
       i.issueDate,
-      i.issuerName,
-      i.issuerNif,
-      i.buyerName,
-      i.buyerNif,
+      safeText(i.issuerName),
+      safeText(i.issuerNif),
+      safeText(i.buyerName),
+      safeText(i.buyerNif),
       decimal(i.netTotal),
       decimal(i.vatTotal),
       decimal(i.total),
-      i.currency,
-      i.fileName,
+      safeText(i.currency),
+      safeText(i.fileName),
     ]
       .map(csvCell)
       .join(";"),

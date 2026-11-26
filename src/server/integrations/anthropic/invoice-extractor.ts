@@ -5,6 +5,7 @@ import { AppError } from "@/server/lib/errors";
 import {
   EMAIL_CATEGORIES,
   INVOICE_DOC_TYPES,
+  isRealDay,
   type EmailCategory,
   type ExtractedInvoice,
 } from "@/server/models/client-mail.model";
@@ -130,7 +131,7 @@ const TOOL_NAME = "registar_email";
 const SYSTEM = `És o assistente de um gabinete de contabilidade em Portugal. Recebes um email que um cliente enviou ao gabinete, com os anexos.
 1. Resume o email (o que envia, o que pede, prazos mencionados).
 2. Para cada anexo, diz se é um documento fiscal português ou estrangeiro (fatura, fatura simplificada, fatura-recibo, nota de crédito/débito, recibo) e, se for, lê os campos.
-Regras: não inventes valores — o que não consegues ler fica a null e baixas a confiança. Os montantes são números (ponto decimal, sem símbolo). As datas em AAAA-MM-DD. Responde sempre com a ferramenta ${TOOL_NAME}.`;
+Regras: não inventes valores — o que não consegues ler fica a null e baixas a confiança. Os montantes são números (ponto decimal, sem símbolo). As datas em AAAA-MM-DD. Responde sempre, e só, chamando a ferramenta ${TOOL_NAME} uma vez.`;
 
 const MAX_BODY = 8000;
 
@@ -205,7 +206,7 @@ export class AnthropicInvoiceExtractor implements InvoiceExtractor {
     const response = await this.api
       .create({
         model: this.model,
-        max_tokens: 8000,
+        max_tokens: 16000,
         system: SYSTEM,
         tools: [
           {
@@ -217,7 +218,8 @@ export class AnthropicInvoiceExtractor implements InvoiceExtractor {
             }) as Anthropic.Tool.InputSchema,
           },
         ],
-        tool_choice: { type: "tool", name: TOOL_NAME },
+        // O Sonnet 5.5 recusa `tool_choice` forçado (400): fica em `auto`, e o prompt manda usar a ferramenta.
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content }],
       })
       .catch((error: unknown) => {
@@ -252,7 +254,7 @@ export function parseExtraction(input: unknown, partIds: Set<string>): MailExtra
       .filter((d) => !seen.has(d.partId) && seen.add(d.partId))
       .map(({ isFiscalDocument: _f, ...d }) => ({
         ...d,
-        issueDate: d.issueDate && /^\d{4}-\d{2}-\d{2}$/.test(d.issueDate) ? d.issueDate : null,
+        issueDate: d.issueDate && isRealDay(d.issueDate) ? d.issueDate : null,
         currency: d.currency.toUpperCase(),
       })),
   };
