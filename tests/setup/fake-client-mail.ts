@@ -62,6 +62,9 @@ export class FakeClientMailRepository implements ClientMailRepository {
   async updateInvoice() {
     return null;
   }
+  async refreshReviewStatus() {
+    return null;
+  }
 }
 
 /** Um extrator que devolve o que se lhe disser, e regista o que leu. */

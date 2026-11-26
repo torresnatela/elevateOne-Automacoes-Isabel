@@ -3,7 +3,6 @@ import { AppError } from "@/server/lib/errors";
 import {
   DOC_TYPE_LABELS,
   STATUS_LABELS,
-  reviewReasons,
   type ClientEmailRecord,
   type InvoiceRecord,
 } from "@/server/models/client-mail.model";
@@ -45,14 +44,9 @@ export class ClientMailService {
     const updated = await this.mail.updateInvoice(id, { ...patch, reviewedById: userId });
     if (!updated) throw notFound();
     if (updated.status === "CONFIRMADA" || updated.status === "REJEITADA") return updated;
-    // Depois de uma correção, volta a ver-se o que ainda há para rever (e guarda-se o porquê).
-    const reasons = reviewReasons({ ...updated, confidence: 1 });
-    const status = reasons.length ? "A_REVER" : "EXTRAIDA";
-    // Só se escreve se ninguém mudou o estado entretanto.
-    return (
-      (await this.mail.updateInvoice(id, { status, reviewReasons: reasons }, updated.status)) ??
-      updated
-    );
+    // Depois de uma correção, volta a ver-se o que ainda há para rever (e guarda-se o porquê),
+    // a partir da fatura como está na base, não da cópia lida antes.
+    return (await this.mail.refreshReviewStatus(id)) ?? updated;
   }
 
   /** O ficheiro da fatura, descarregado na hora da caixa Gmail onde chegou. */

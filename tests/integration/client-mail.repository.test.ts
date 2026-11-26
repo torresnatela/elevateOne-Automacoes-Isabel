@@ -118,6 +118,46 @@ describe("PrismaClientMailRepository", () => {
     expect(after?.status).toBe("CONFIRMADA");
   });
 
+  it("refreshReviewStatus recalcula a partir da fatura como está agora", async () => {
+    const { account, client } = await fixtures();
+    await repo.saveEmail(newEmail(client.id, account.id), [
+      { ...newInvoice, status: "A_REVER", reviewReasons: ["Base + IVA não dá o total."] },
+    ]);
+    const [invoice] = await repo.listInvoices({});
+    // Outra pessoa tirou a data entretanto: o recálculo vê isso, não a cópia antiga.
+    await repo.updateInvoice(invoice.id, { issueDate: null, total: 123 });
+    const refreshed = await repo.refreshReviewStatus(invoice.id);
+    expect(refreshed).toMatchObject({ status: "A_REVER", reviewReasons: ["Falta a data."] });
+    await repo.updateInvoice(invoice.id, { issueDate: "2026-11-20" });
+    await expect(repo.refreshReviewStatus(invoice.id)).resolves.toMatchObject({
+      status: "EXTRAIDA",
+      reviewReasons: [],
+    });
+    await repo.updateInvoice(invoice.id, { status: "CONFIRMADA", issueDate: null });
+    await expect(repo.refreshReviewStatus(invoice.id)).resolves.toMatchObject({
+      status: "CONFIRMADA",
+    });
+  });
+
+  it("depois de a conta passar a outra caixa, a corrida antiga não grava nada nela", async () => {
+    const { account, client } = await fixtures();
+    await prisma.googleAccount.update({ where: { id: account.id }, data: { email: "nova@x.pt" } });
+    await repo.setSyncState(
+      {
+        googleAccountId: account.id,
+        syncedUntil: new Date(),
+        lastRunAt: new Date(),
+        lastError: null,
+      },
+      "isabel@x.pt",
+    );
+    expect(await repo.getSyncState(account.id)).toBeNull();
+    await expect(repo.saveEmail(newEmail(client.id, account.id), [newInvoice])).resolves.toEqual({
+      invoices: 0,
+    });
+    expect(await repo.hasRfcMessageId("<m1@alfa.pt>")).toBe(false);
+  });
+
   it("o mesmo email (Message-ID) não se guarda duas vezes", async () => {
     const { account, client } = await fixtures();
     await repo.saveEmail(newEmail(client.id, account.id), []);

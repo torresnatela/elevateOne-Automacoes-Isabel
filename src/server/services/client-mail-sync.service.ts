@@ -62,18 +62,43 @@ const LOCK = "client-mail-sync";
 const LOCK_TTL_MS = 10 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;
 
-/** As procuras do Gmail para estes clientes, a partir de uma data. */
-export function buildQueries(clients: Client[], since: Date, perQuery: number): string[] {
+/** As procuras do Gmail para estes clientes (sem datas: a janela junta-se em `discover`). */
+export function buildQueries(clients: Client[], perQuery: number): string[] {
   const senders = [
     ...new Set(clients.flatMap((c) => [...c.contactEmails, ...c.emailDomains.map((d) => `@${d}`)])),
   ];
-  const after = Math.floor(since.getTime() / 1000);
   const queries: string[] = [];
   for (let i = 0; i < senders.length; i += perQuery)
-    queries.push(
-      `from:(${senders.slice(i, i + perQuery).join(" OR ")}) after:${after} -in:sent -in:chats`,
-    );
+    queries.push(`from:(${senders.slice(i, i + perQuery).join(" OR ")}) -in:sent -in:chats`);
   return queries;
+}
+
+const epoch = (d: Date) => Math.floor(d.getTime() / 1000);
+
+/**
+ * Todos os ids de uma procura entre duas datas. O Gmail devolve só os mais recentes até ao
+ * máximo pedido: quando a janela enche, divide-se ao meio até cada metade caber. Devolve
+ * também se ficou alguma janela de um dia que, mesmo assim, não coube (aí faltam emails).
+ */
+export async function discover(
+  list: (query: string, limit: number) => Promise<string[]>,
+  query: string,
+  from: Date,
+  to: Date,
+  max: number,
+): Promise<{ ids: string[]; truncated: boolean }> {
+  const found = await list(`${query} after:${epoch(from)} before:${epoch(to)}`, max);
+  if (found.length < max) return { ids: found, truncated: false };
+  if (to.getTime() - from.getTime() <= DAY_MS) return { ids: found, truncated: true };
+  const middle = new Date(
+    Math.floor((from.getTime() + (to.getTime() - from.getTime()) / 2) / 1000) * 1000,
+  );
+  // As metades sobrepõem-se um segundo, para um email no instante do meio entrar numa delas.
+  const [older, newer] = await Promise.all([
+    discover(list, query, from, new Date(middle.getTime() + 1000), max),
+    discover(list, query, middle, to, max),
+  ]);
+  return { ids: [...older.ids, ...newer.ids], truncated: older.truncated || newer.truncated };
 }
 
 /** O cliente de um remetente: primeiro quem tem o endereço exato, depois quem tem o domínio. */
@@ -185,16 +210,30 @@ export class ClientMailSyncService {
 
     try {
       if (clients.length === 0) {
-        await this.saveState(account.id, startedAt, state?.syncedUntil ?? null, null);
+        await this.saveState(
+          account.id,
+          account.email,
+          startedAt,
+          state?.syncedUntil ?? null,
+          null,
+        );
         return report;
       }
       const workspace = await this.deps.google.workspaceFor(account.userId);
       const ids = new Set<string>();
       let truncated = false;
-      for (const query of buildQueries(clients, since, this.options.sendersPerQuery)) {
-        const found = await workspace.listMessageIds(query, this.options.maxDiscovered);
-        if (found.length >= this.options.maxDiscovered) truncated = true;
-        for (const id of found) ids.add(id);
+      // Até amanhã: o «before:» exclui o próprio instante e os emails de hoje têm de entrar.
+      const until = new Date(startedAt.getTime() + DAY_MS);
+      for (const query of buildQueries(clients, this.options.sendersPerQuery)) {
+        const found = await discover(
+          (q, limit) => workspace.listMessageIds(q, limit),
+          query,
+          since,
+          until,
+          this.options.maxDiscovered,
+        );
+        truncated ||= found.truncated;
+        for (const id of found.ids) ids.add(id);
       }
 
       const seen = await this.deps.mail.seenIds(account.id, [...ids]);
@@ -219,26 +258,39 @@ export class ClientMailSyncService {
       // Só se avança a marca quando tudo até agora ficou tratado.
       // Uma procura que devolveu o máximo pode ter deixado emails mais antigos por descobrir.
       const done = failures === 0 && report.pending === 0 && !truncated;
+      if (truncated && !report.error)
+        report.error = `Há mais de ${this.options.maxDiscovered} emails de clientes num só dia: alguns podem ter ficado por ler.`;
       await this.saveState(
         account.id,
+        account.email,
         startedAt,
         done ? startedAt : (state?.syncedUntil ?? null),
         report.error,
       );
     } catch (err) {
       report.error = (err as Error).message;
-      await this.saveState(account.id, startedAt, state?.syncedUntil ?? null, report.error);
+      await this.saveState(
+        account.id,
+        account.email,
+        startedAt,
+        state?.syncedUntil ?? null,
+        report.error,
+      );
     }
     return report;
   }
 
   private saveState(
     googleAccountId: string,
+    mailbox: string,
     lastRunAt: Date,
     syncedUntil: Date | null,
     lastError: string | null,
   ) {
-    return this.deps.mail.setSyncState({ googleAccountId, lastRunAt, syncedUntil, lastError });
+    return this.deps.mail.setSyncState(
+      { googleAccountId, lastRunAt, syncedUntil, lastError },
+      mailbox,
+    );
   }
 
   /** Lê um email e guarda-o. Devolve quantas faturas tinha, ou `null` se não era para guardar. */

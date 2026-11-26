@@ -35,21 +35,31 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
   /** Pergunta até todas as caixas terem uma corrida nova (ou o tempo acabar), e atualiza a página. */
   function waitForRun(before: Map<string, string | null>, startedAt: number) {
     timer.current = setTimeout(async () => {
-      let finished = Date.now() - startedAt > POLL_MAX_MS;
+      let finished = false;
       try {
         const { mailboxes: now } = await api<{ mailboxes: MailboxView[] }>(
           "/api/clients/sync",
           "GET",
         );
-        finished ||= now.every(
-          (m) => m.lastRunAt !== null && m.lastRunAt !== before.get(m.mailbox),
-        );
+        finished = now.every((m) => m.lastRunAt !== null && m.lastRunAt !== before.get(m.mailbox));
       } catch {
         // Uma falha de rede numa pergunta não para a espera.
       }
-      if (!finished) return waitForRun(before, startedAt);
-      setMessage({ error: false, text: "Sincronização concluída." });
-      router.refresh();
+      if (finished) {
+        setMessage({ error: false, text: "Sincronização concluída." });
+        router.refresh();
+        return;
+      }
+      // Passou o tempo sem se ver o fim: não se diz que acabou.
+      if (Date.now() - startedAt > POLL_MAX_MS) {
+        setMessage({
+          error: true,
+          text: "Não foi possível confirmar que a sincronização acabou. Atualize a página daqui a pouco.",
+        });
+        router.refresh();
+        return;
+      }
+      waitForRun(before, startedAt);
     }, POLL_MS);
   }
 
@@ -57,13 +67,19 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
     setBusy(true);
     setMessage(null);
     try {
+      // O ponto de partida é o estado de agora, não o de quando a página abriu: uma corrida
+      // agendada entretanto não pode passar pela que se pediu.
+      const { mailboxes: current } = await api<{ mailboxes: MailboxView[] }>(
+        "/api/clients/sync",
+        "GET",
+      );
       await api("/api/clients/sync", "POST");
       setMessage({
         error: false,
         text: "O agente começou a ler os emails. A página atualiza-se quando acabar.",
       });
       if (timer.current) clearTimeout(timer.current);
-      waitForRun(new Map(mailboxes.map((m) => [m.mailbox, m.lastRunAt])), Date.now());
+      waitForRun(new Map(current.map((m) => [m.mailbox, m.lastRunAt])), Date.now());
     } catch (e) {
       setMessage({ error: true, text: (e as Error).message });
     } finally {

@@ -34,6 +34,9 @@ describe("PrismaClientRepository", () => {
     await repo.create(data({ name: "Outra", nif: "123456789" }));
     expect((await repo.list({ query: "Loja 2" })).map((c) => c.name)).toEqual(["Loja 2"]);
     expect((await repo.list({ query: "PT 123 456" })).map((c) => c.name)).toEqual(["Outra"]);
+    // Só pontuação não é um NIF: não pode trazer todos os clientes com NIF.
+    expect(await repo.list({ query: "." })).toEqual([]);
+    expect(await repo.list({ query: "PT ." })).toEqual([]);
   });
 
   it("dois clientes ao mesmo tempo com o mesmo email: só um fica", async () => {

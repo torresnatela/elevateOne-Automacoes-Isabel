@@ -9,8 +9,8 @@ export class ClientEmailTakenError extends AppError {
   }
 }
 
-/** Um NIF só com dígitos, espaços, pontos e um «PT» opcional: é por NIF que se procura. */
-const looksLikeNif = (q: string) => /^(PT)?[\d\s.]+$/i.test(q);
+/** Um NIF só com dígitos, espaços, pontos e um «PT» opcional (e pelo menos um dígito): é por NIF que se procura. */
+const looksLikeNif = (q: string) => /^(PT)?[\d\s.]+$/i.test(q) && /\d/.test(q);
 
 /** Contrato de persistência dos clientes. */
 export interface ClientRepository {

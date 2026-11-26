@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { reviewReasons } from "@/server/models/client-mail.model";
 import type {
   ClientEmailRecord,
   ExtractedInvoice,
@@ -89,7 +90,11 @@ export interface ClientMailRepository {
 
   getSyncState(googleAccountId: string): Promise<MailSyncStateRecord | null>;
   listSyncStates(): Promise<MailSyncStateRecord[]>;
-  setSyncState(state: MailSyncStateRecord): Promise<void>;
+  /**
+   * Guarda até onde se leu. Com `mailbox`, só guarda se a conta ainda for essa caixa: se a
+   * pessoa ligou outra a meio da corrida, a caixa nova não herda a marca da antiga.
+   */
+  setSyncState(state: MailSyncStateRecord, mailbox?: string): Promise<void>;
 
   /** Fica com o trinco se estiver livre (ou expirado). */
   tryLock(name: string, ttlMs: number): Promise<boolean>;
@@ -98,6 +103,11 @@ export interface ClientMailRepository {
   listEmails(clientId: string, limit?: number): Promise<ClientEmailRecord[]>;
   listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]>;
   findInvoiceSource(id: string): Promise<InvoiceSource | null>;
+  /**
+   * Recalcula, sob o trinco da linha, o estado e os motivos a partir da fatura como está agora
+   * (uma confirmada ou rejeitada fica como está). Duas correções ao mesmo tempo não se pisam.
+   */
+  refreshReviewStatus(id: string): Promise<InvoiceRecord | null>;
   /**
    * `null` se a fatura não existe. Com `onlyIfStatus`, só escreve se o estado guardado ainda for
    * esse (senão devolve a fatura como está): outra pessoa pode tê-la confirmado entretanto.
@@ -120,6 +130,15 @@ const range = (from?: Date, to?: Date, instant = false) => ({
   ...(from ? { gte: from } : {}),
   ...(to ? (instant ? { lt: new Date(to.getTime() + 24 * 60 * 60_000) } : { lte: to }) : {}),
 });
+
+/** A conta Google ainda é esta caixa (quem a ligou não a trocou por outra). */
+async function sameMailbox(tx: Prisma.TransactionClient, googleAccountId: string, mailbox: string) {
+  const account = await tx.googleAccount.findUnique({
+    where: { id: googleAccountId },
+    select: { email: true },
+  });
+  return account?.email.toLowerCase() === mailbox.toLowerCase();
+}
 
 const INVOICE_INCLUDE = {
   client: { select: { name: true } },
@@ -183,13 +202,19 @@ export class PrismaClientMailRepository implements ClientMailRepository {
   }
 
   async saveEmail(email: NewClientEmail, invoices: NewInvoice[]) {
+    let saved = true;
     await this.db.$transaction(async (tx) => {
-      const saved = await tx.clientEmail.create({ data: email });
+      // A conta passou a ser outra caixa a meio da corrida: este email é da antiga, não se guarda.
+      if (!(await sameMailbox(tx, email.googleAccountId, email.mailbox))) {
+        saved = false;
+        return;
+      }
+      const created = await tx.clientEmail.create({ data: email });
       if (invoices.length)
         await tx.invoice.createMany({
           data: invoices.map((inv) => ({
             clientId: email.clientId,
-            emailId: saved.id,
+            emailId: created.id,
             attachmentPartId: inv.attachmentPartId,
             fileName: inv.fileName,
             mimeType: inv.mimeType,
@@ -218,7 +243,7 @@ export class PrismaClientMailRepository implements ClientMailRepository {
         skipDuplicates: true,
       });
     });
-    return { invoices: invoices.length };
+    return { invoices: saved ? invoices.length : 0 };
   }
 
   async getSyncState(googleAccountId: string) {
@@ -229,12 +254,15 @@ export class PrismaClientMailRepository implements ClientMailRepository {
     return this.db.mailSyncState.findMany();
   }
 
-  async setSyncState(state: MailSyncStateRecord) {
+  async setSyncState(state: MailSyncStateRecord, mailbox?: string) {
     const { googleAccountId, ...data } = state;
-    await this.db.mailSyncState.upsert({
-      where: { googleAccountId },
-      update: data,
-      create: state,
+    await this.db.$transaction(async (tx) => {
+      if (mailbox && !(await sameMailbox(tx, googleAccountId, mailbox))) return;
+      await tx.mailSyncState.upsert({
+        where: { googleAccountId },
+        update: data,
+        create: state,
+      });
     });
   }
 
@@ -321,6 +349,25 @@ export class PrismaClientMailRepository implements ClientMailRepository {
       gmailMessageId: row.email.gmailMessageId,
       attachmentPartId: row.attachmentPartId,
     };
+  }
+
+  async refreshReviewStatus(id: string) {
+    if (!UUID_RE.test(id)) return null;
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "invoices" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      const row = await tx.invoice.findUnique({ where: { id }, include: INVOICE_INCLUDE });
+      if (!row) return null;
+      const current = toInvoice(row);
+      if (current.status === "CONFIRMADA" || current.status === "REJEITADA") return current;
+      // Já foi vista por uma pessoa: a confiança do extrator deixa de contar.
+      const reasons = reviewReasons({ ...current, confidence: 1 });
+      const updated = await tx.invoice.update({
+        where: { id },
+        data: { status: reasons.length ? "A_REVER" : "EXTRAIDA", reviewReasons: reasons },
+        include: INVOICE_INCLUDE,
+      });
+      return toInvoice(updated);
+    });
   }
 
   async updateInvoice(id: string, patch: InvoicePatch, onlyIfStatus?: InvoiceStatus) {

@@ -4,6 +4,7 @@ import {
   ClientMailSyncService,
   batchAttachments,
   buildQueries,
+  discover,
   oldestFirst,
 } from "@/server/services/client-mail-sync.service";
 import { FakeClientRepository } from "../../setup/fake-client.repository";
@@ -201,16 +202,56 @@ describe("ClientMailSyncService", () => {
   });
 });
 
-it("buildQueries junta os remetentes em grupos, com a data", () => {
+it("buildQueries junta os remetentes em grupos", () => {
   const clients = [
     { contactEmails: ["a@x.pt", "b@x.pt"], emailDomains: ["y.pt"] },
     { contactEmails: ["c@z.pt"], emailDomains: [] },
   ] as unknown as Client[];
-  const q = buildQueries(clients, new Date("2026-11-01T00:00:00Z"), 2);
-  expect(q).toEqual([
-    "from:(a@x.pt OR b@x.pt) after:1793491200 -in:sent -in:chats",
-    "from:(@y.pt OR c@z.pt) after:1793491200 -in:sent -in:chats",
+  expect(buildQueries(clients, 2)).toEqual([
+    "from:(a@x.pt OR b@x.pt) -in:sent -in:chats",
+    "from:(@y.pt OR c@z.pt) -in:sent -in:chats",
   ]);
+});
+
+it("discover divide a janela ao meio quando a procura enche, até encontrar tudo", async () => {
+  const DAY = 24 * 60 * 60;
+  const from = new Date("2026-11-01T00:00:00Z");
+  const to = new Date("2026-11-05T00:00:00Z");
+  // Três emails por dia; a procura só devolve 4 de cada vez.
+  const all = Array.from({ length: 12 }, (_, i) => ({
+    id: `m${i}`,
+    at: from.getTime() / 1000 + Math.floor(i / 3) * DAY + 3600 * (i % 3),
+  }));
+  const queries: string[] = [];
+  const list = async (q: string, limit: number) => {
+    queries.push(q);
+    const after = Number(/after:(\d+)/.exec(q)![1]);
+    const before = Number(/before:(\d+)/.exec(q)![1]);
+    return all
+      .filter((e) => e.at > after && e.at < before)
+      .reverse()
+      .slice(0, limit)
+      .map((e) => e.id);
+  };
+  const result = await discover(list, "from:(a@x.pt)", from, to, 4);
+  expect(result.truncated).toBe(false);
+  expect(new Set(result.ids)).toEqual(
+    new Set(all.filter((e) => e.at > from.getTime() / 1000).map((e) => e.id)),
+  );
+  expect(queries[0]).toContain("from:(a@x.pt) after:");
+});
+
+it("discover diz que ficou a faltar quando um só dia enche", async () => {
+  const list = async (_q: string, limit: number) =>
+    Array.from({ length: limit }, (_, i) => `x${i}`);
+  const result = await discover(
+    list,
+    "q",
+    new Date("2026-11-01T00:00:00Z"),
+    new Date("2026-11-03T00:00:00Z"),
+    5,
+  );
+  expect(result.truncated).toBe(true);
 });
 
 it("oldestFirst ordena os ids do Gmail pelo valor, juntando procuras diferentes", () => {
@@ -243,10 +284,14 @@ it("um email com anexos que não cabem num pedido é lido em vários, e as fatur
 it("não dá a caixa por lida quando a procura devolve o máximo de ids", async () => {
   const { service, addEmail, mail, workspaces } = await setup();
   addEmail("u1", email("m1"));
-  workspaces.get("u1")!.listMessageIds = async () =>
-    Array.from({ length: 100 }, (_, i) => (i === 0 ? "m1" : `x${i}`));
+  const ids = Array.from({ length: 100 }, (_, i) => (i === 0 ? "m1" : `x${i}`));
+  workspaces.get("u1")!.listMessageIds = async () => ids;
+  // Todos já vistos: nada fica pendente, só a procura cortada impede de dar a caixa por lida.
+  await mail.markSeen("acc1", ids);
   workspaces.get("u1")!.getEmail = async (id: string) =>
     email(id, { from: "alguem@fora.pt", attachments: [] });
-  await service.run();
+  const report = await service.run();
+  expect(report.accounts[0].pending).toBe(0);
+  expect(report.accounts[0].error).toContain("num só dia");
   expect(mail.states.get("acc1")?.syncedUntil).toBeNull();
 });
