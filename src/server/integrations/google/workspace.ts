@@ -129,6 +129,8 @@ export interface GoogleWorkspace {
   searchEmails(query: string, limit: number): Promise<EmailSummary[]>;
   /** Só os ids dos emails que batem na procura (do mais recente para trás), sem os ler. */
   listMessageIds(query: string, limit: number): Promise<string[]>;
+  /** A data de chegada (`internalDate`, ms) de cada email, sem os ler: é ela que ordena a caixa. */
+  messageDates(ids: string[]): Promise<Map<string, number>>;
   getEmail(id: string): Promise<EmailMessage>;
   sendEmail(email: NewEmail): Promise<{ id: string }>;
   /** A quem e como responder a um email. Com `all`, também a quem estava no Para e em cópia. */

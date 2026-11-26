@@ -254,6 +254,16 @@ it("discover diz que ficou a faltar quando um só dia enche", async () => {
   expect(result.truncated).toBe(true);
 });
 
+it("lê pela data de chegada do Gmail, mesmo quando os ids não seguem essa ordem", async () => {
+  const { service, addEmail, extractor, workspaces } = await setup();
+  for (const id of ["m1", "m2", "m3", "m4"]) addEmail("u1", email(id));
+  const ws = workspaces.get("u1")!;
+  // m4 chegou primeiro e m1 por último.
+  ws.arrivals.set("m4", 1).set("m3", 2).set("m2", 3).set("m1", 4);
+  await service.run();
+  expect(extractor.calls.map((c) => c.subject)).toEqual(["Assunto m4", "Assunto m3", "Assunto m2"]);
+});
+
 it("oldestFirst ordena os ids do Gmail pelo valor, juntando procuras diferentes", () => {
   expect(oldestFirst(["18f2", "18a0", "1900", "18f1"])).toEqual(["18a0", "18f1", "18f2", "1900"]);
 });

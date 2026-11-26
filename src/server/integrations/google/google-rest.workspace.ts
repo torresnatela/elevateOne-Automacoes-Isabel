@@ -278,6 +278,22 @@ export class GoogleRestWorkspace implements GoogleWorkspace {
     return messages.map(toSummary);
   }
 
+  async messageDates(ids: string[]): Promise<Map<string, number>> {
+    const dates = new Map<string, number>();
+    // Poucos pedidos de cada vez, para não bater no limite por segundo do Gmail.
+    for (let i = 0; i < ids.length; i += 10)
+      await Promise.all(
+        ids.slice(i, i + 10).map(async (id) => {
+          const m = await this.call(`${GMAIL}/messages/${encodeURIComponent(id)}`, {
+            query: { format: "minimal", fields: "id,internalDate" },
+          });
+          const at = Number(m?.internalDate);
+          if (Number.isFinite(at)) dates.set(id, at);
+        }),
+      );
+    return dates;
+  }
+
   async listMessageIds(query: string, limit: number): Promise<string[]> {
     const ids: string[] = [];
     let pageToken: string | undefined;

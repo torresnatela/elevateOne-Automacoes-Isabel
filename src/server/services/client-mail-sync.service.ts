@@ -237,8 +237,13 @@ export class ClientMailSyncService {
       }
 
       const seen = await this.deps.mail.seenIds(account.id, [...ids]);
-      // Lê-se do mais antigo para a frente, juntando por ordem os resultados de todas as procuras.
-      const fresh = oldestFirst([...ids].filter((id) => !seen.has(id)));
+      // Lê-se do mais antigo para a frente pela data de chegada (internalDate) que o Gmail dá a
+      // cada email, juntando todas as procuras; o id só desempata.
+      const unseen = oldestFirst([...ids].filter((id) => !seen.has(id)));
+      const arrived = await workspace.messageDates(unseen);
+      // Sem data (o Gmail não a deu), fica para o fim. A ordenação é estável: o id desempata.
+      const at = (id: string) => arrived.get(id) ?? Number.MAX_SAFE_INTEGER;
+      const fresh = [...unseen].sort((a, b) => at(a) - at(b));
       const batch = fresh.slice(0, Math.max(0, budget));
       report.pending = fresh.length - batch.length;
 

@@ -150,6 +150,18 @@ export class FakeGoogleWorkspace implements GoogleWorkspace {
       .slice(0, limit)
       .map(({ body: _body, attachments: _attachments, ...summary }) => summary);
   }
+  /** A data de chegada de cada email: a do cabeçalho, ou `arrivals` quando o teste a fixa. */
+  arrivals = new Map<string, number>();
+  async messageDates(ids: string[]) {
+    const dates = new Map<string, number>();
+    for (const id of ids) {
+      const email = this.emails.find((e) => e.id === id);
+      const at = this.arrivals.get(id) ?? (email ? Date.parse(email.date) : NaN);
+      if (Number.isFinite(at)) dates.set(id, at);
+    }
+    return dates;
+  }
+
   async listMessageIds(query: string, limit: number) {
     this.calls.push(["listMessageIds", query, limit]);
     return this.emails.slice(0, limit).map((e) => e.id);
