@@ -216,6 +216,20 @@ describe("ClientMailSyncService", () => {
     expect(defer).not.toHaveBeenCalled();
   });
 
+  it("uma corrida que falha antes de ler as caixas deixa o erro no estado de todas", async () => {
+    const { mail, service, clients } = await setup();
+    vi.spyOn(clients, "list").mockRejectedValue(new Error("base em baixo"));
+    await expect(service.run()).rejects.toThrow("base em baixo");
+    for (const id of ["acc1", "acc2"]) {
+      expect(mail.states.get(id)).toMatchObject({
+        lastError: "A corrida falhou: base em baixo",
+        lastRunAt: null,
+        syncedUntil: null,
+      });
+    }
+    expect(mail.locked).toBe(false);
+  });
+
   it("start solta o trinco mesmo quando a corrida falha", async () => {
     const { mail, service, workspaces } = await setup();
     let task: (() => Promise<void>) | null = null;

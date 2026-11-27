@@ -286,6 +286,30 @@ describe("PrismaClientMailRepository", () => {
     );
   });
 
+  it("recordRunError grava o erro sem mexer na leitura, haja estado ou não", async () => {
+    const { account } = await fixtures();
+    await repo.recordRunError(account.id, "A corrida falhou: x");
+    await expect(repo.getSyncState(account.id)).resolves.toMatchObject({
+      lastError: "A corrida falhou: x",
+      lastRunAt: null,
+      syncedUntil: null,
+    });
+    const at = new Date("2026-11-25T10:00:00Z");
+    await repo.setSyncState({
+      googleAccountId: account.id,
+      syncedUntil: at,
+      startFrom: null,
+      lastRunAt: at,
+      lastError: null,
+    });
+    await repo.recordRunError(account.id, "A corrida falhou: y");
+    await expect(repo.getSyncState(account.id)).resolves.toMatchObject({
+      lastError: "A corrida falhou: y",
+      lastRunAt: at,
+      syncedUntil: at,
+    });
+  });
+
   it("o mesmo email (Message-ID) não se guarda duas vezes", async () => {
     const { account, client } = await fixtures();
     await repo.saveEmail(newEmail(client.id, account.id), []);

@@ -98,6 +98,12 @@ export interface ClientMailRepository {
    */
   setSyncState(state: MailSyncStateRecord, mailbox?: string): Promise<boolean>;
 
+  /**
+   * Regista que a corrida falhou para esta caixa, sem mexer em até onde se leu nem na data da
+   * última corrida: quem espera vê o erro, e a caixa continua por ler.
+   */
+  recordRunError(googleAccountId: string, error: string): Promise<void>;
+
   /** Fica com o trinco se estiver livre (ou expirado). */
   tryLock(name: string, ttlMs: number): Promise<boolean>;
   unlock(name: string): Promise<void>;
@@ -271,6 +277,14 @@ export class PrismaClientMailRepository implements ClientMailRepository {
         create: state,
       });
       return true;
+    });
+  }
+
+  async recordRunError(googleAccountId: string, error: string) {
+    await this.db.mailSyncState.upsert({
+      where: { googleAccountId },
+      update: { lastError: error },
+      create: { googleAccountId, lastError: error },
     });
   }
 

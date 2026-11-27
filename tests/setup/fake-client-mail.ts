@@ -43,6 +43,16 @@ export class FakeClientMailRepository implements ClientMailRepository {
     this.states.set(state.googleAccountId, state);
     return true;
   }
+  async recordRunError(googleAccountId: string, error: string) {
+    const current = this.states.get(googleAccountId);
+    this.states.set(googleAccountId, {
+      googleAccountId,
+      syncedUntil: current?.syncedUntil ?? null,
+      startFrom: current?.startFrom ?? null,
+      lastRunAt: current?.lastRunAt ?? null,
+      lastError: error,
+    });
+  }
   async tryLock() {
     if (this.locked) return false;
     this.locked = true;

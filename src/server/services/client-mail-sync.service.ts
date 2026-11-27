@@ -211,8 +211,27 @@ export class ClientMailSyncService {
     return true;
   }
 
-  /** A corrida em si, com o trinco já na mão de quem chama. */
+  /**
+   * A corrida em si, com o trinco já na mão de quem chama. Se falhar antes de acabar (fora do
+   * que cada caixa já regista), o erro fica no estado de todas as caixas: quem esperava por esta
+   * corrida — mesmo noutro separador — vê que falhou, e não que concluiu.
+   */
   private async runLocked(): Promise<SyncReport> {
+    try {
+      return await this.runAccounts();
+    } catch (error) {
+      const message = `A corrida falhou: ${(error as Error).message}`;
+      try {
+        for (const account of await this.deps.accounts.listAll())
+          await this.deps.mail.recordRunError(account.id, message);
+      } catch {
+        // Sem base de dados nem isto se grava; o erro original segue na mesma.
+      }
+      throw error;
+    }
+  }
+
+  private async runAccounts(): Promise<SyncReport> {
     const clients = (await this.deps.clients.list()).filter(
       (c) => c.contactEmails.length || c.emailDomains.length,
     );

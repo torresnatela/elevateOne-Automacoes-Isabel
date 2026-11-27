@@ -37,6 +37,15 @@ describe("syncOutcome", () => {
     expect(outcome.text).toContain("com erros em a@x.pt");
   });
 
+  it("outra corrida já decorria e falhou antes de ler: o erro que ela gravou aparece", () => {
+    const outcome = syncOutcome(
+      false,
+      [box("a@x.pt", "t1")],
+      [box("a@x.pt", "t1", "A corrida falhou: base em baixo")],
+    );
+    expect(outcome.ok).toBe(false);
+  });
+
   it("outra corrida já decorria: sem ponto de partida, conta só se ficaram erros", () => {
     expect(syncOutcome(false, [box("a@x.pt", "t1")], [box("a@x.pt", "t1")]).ok).toBe(true);
     expect(syncOutcome(false, [box("a@x.pt", "t1")], [box("a@x.pt", "t2", "x")]).ok).toBe(false);
