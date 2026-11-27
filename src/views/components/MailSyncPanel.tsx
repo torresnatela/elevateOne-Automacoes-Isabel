@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/views/lib/api";
+import { syncOutcome } from "@/views/lib/sync-outcome";
 
 export interface MailboxView {
   mailbox: string;
@@ -43,20 +44,25 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
    * fica com o trinco antes de o servidor responder, por isso, depois do pedido, «a decorrer» é
    * exatamente a corrida pedida — ou a que já estava a correr e fez recusar o pedido.
    */
-  function waitForRun(startedAt: number) {
+  function waitForRun(startedAt: number, started: boolean, before: MailboxView[]) {
     timer.current = setTimeout(async () => {
       if (gone.current) return;
-      let finished = false;
+      let after: MailboxView[] | null = null;
       try {
-        const { running } = await api<{ running: boolean }>("/api/clients/sync", "GET");
-        finished = !running;
+        const status = await api<{ running: boolean; mailboxes: MailboxView[] }>(
+          "/api/clients/sync",
+          "GET",
+        );
+        if (!status.running) after = status.mailboxes;
       } catch {
         // Uma falha de rede numa pergunta não para a espera.
       }
       if (gone.current) return;
-      if (finished) {
+      if (after) {
+        // O trinco soltou-se: vê-se se a corrida leu mesmo as caixas, ou se falhou.
+        const outcome = syncOutcome(started, before, after);
         setWaiting(false);
-        setMessage({ error: false, text: "Sincronização concluída." });
+        setMessage({ error: !outcome.ok, text: outcome.text });
         router.refresh();
         return;
       }
@@ -70,7 +76,7 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         router.refresh();
         return;
       }
-      waitForRun(startedAt);
+      waitForRun(startedAt, started, before);
     }, POLL_MS);
   }
 
@@ -103,7 +109,7 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
       });
       if (timer.current) clearTimeout(timer.current);
       setWaiting(true);
-      waitForRun(Date.now());
+      waitForRun(Date.now(), started, current);
     } catch (e) {
       if (!gone.current) setMessage({ error: true, text: (e as Error).message });
     } finally {
