@@ -47,6 +47,9 @@ export class FakeClientMailRepository implements ClientMailRepository {
     this.locked = true;
     return true;
   }
+  async isLocked() {
+    return this.locked;
+  }
   async unlock() {
     this.locked = false;
   }

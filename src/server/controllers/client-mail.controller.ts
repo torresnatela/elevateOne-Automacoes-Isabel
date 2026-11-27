@@ -58,7 +58,11 @@ export class ClientMailController {
   async status(req: NextRequest) {
     try {
       await requireSession(req);
-      return NextResponse.json({ mailboxes: await this.mail.mailboxes() });
+      const [mailboxes, running] = await Promise.all([
+        this.mail.mailboxes(),
+        this.sync.isRunning(),
+      ]);
+      return NextResponse.json({ mailboxes, running });
     } catch (err) {
       return handleError(err);
     }

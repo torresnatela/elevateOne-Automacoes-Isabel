@@ -101,6 +101,8 @@ export interface ClientMailRepository {
   /** Fica com o trinco se estiver livre (ou expirado). */
   tryLock(name: string, ttlMs: number): Promise<boolean>;
   unlock(name: string): Promise<void>;
+  /** O trinco está seguro (e não expirou): a tarefa está a correr. */
+  isLocked(name: string): Promise<boolean>;
 
   listEmails(clientId: string, limit?: number): Promise<ClientEmailRecord[]>;
   listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]>;
@@ -278,6 +280,14 @@ export class PrismaClientMailRepository implements ClientMailRepository {
       ON CONFLICT ("name") DO UPDATE SET "locked_until" = EXCLUDED."locked_until"
         WHERE "job_locks"."locked_until" < now()
       RETURNING "name"`;
+    return rows.length > 0;
+  }
+
+  async isLocked(name: string) {
+    // Compara no SQL com now(), como o tryLock: a coluna não tem fuso e lê-la pelo Prisma (em
+    // UTC) daria outra hora que a que o SQL escreveu.
+    const rows = await this.db.$queryRaw<{ name: string }[]>`
+      SELECT "name" FROM "job_locks" WHERE "name" = ${name} AND "locked_until" > now()`;
     return rows.length > 0;
   }
 

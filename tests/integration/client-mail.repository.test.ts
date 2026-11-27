@@ -272,9 +272,12 @@ describe("PrismaClientMailRepository", () => {
   });
 
   it("o trinco só deixa uma corrida de cada vez, e solta-se", async () => {
+    expect(await repo.isLocked("x")).toBe(false);
     expect(await repo.tryLock("x", 60_000)).toBe(true);
+    expect(await repo.isLocked("x")).toBe(true);
     expect(await repo.tryLock("x", 60_000)).toBe(false);
     await repo.unlock("x");
+    expect(await repo.isLocked("x")).toBe(false);
     expect(await repo.tryLock("x", 60_000)).toBe(true);
     expect(await repo.tryLock("y", -1)).toBe(true);
     expect(await repo.tryLock("y", 60_000)).toBe(true); // o anterior já tinha expirado

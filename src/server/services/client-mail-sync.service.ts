@@ -177,6 +177,11 @@ export class ClientMailSyncService {
     return this.deps.now?.() ?? new Date();
   }
 
+  /** Há uma corrida a decorrer agora (de qualquer origem: o agendamento, ou o botão noutro separador). */
+  isRunning(): Promise<boolean> {
+    return this.deps.mail.isLocked(LOCK);
+  }
+
   async run(): Promise<SyncReport> {
     if (!(await this.deps.mail.tryLock(LOCK, LOCK_TTL_MS))) return { skipped: true, accounts: [] };
     try {

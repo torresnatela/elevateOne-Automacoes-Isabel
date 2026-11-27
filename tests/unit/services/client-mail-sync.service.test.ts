@@ -196,6 +196,13 @@ describe("ClientMailSyncService", () => {
     expect(extractor.calls[0].attachments.map((a) => a.partId)).toEqual(["3"]);
   });
 
+  it("diz se há uma corrida a decorrer, de onde quer que tenha vindo", async () => {
+    const { mail, service } = await setup();
+    expect(await service.isRunning()).toBe(false);
+    mail.locked = true;
+    expect(await service.isRunning()).toBe(true);
+  });
+
   it("não corre duas vezes ao mesmo tempo", async () => {
     const { mail, service } = await setup();
     mail.locked = true;
