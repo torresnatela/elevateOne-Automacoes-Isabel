@@ -720,6 +720,19 @@ describe("GoogleRestWorkspace: ids e datas para o agente de faturas", () => {
     expect(dates.has("b")).toBe(false);
   });
 
+  it("messageDates não falha toda por um email: deixa sem data só esse", async () => {
+    const f = fakeFetch(
+      { json: { id: "a", internalDate: "1000" } },
+      { status: 500, json: { error: { message: "avaria" } } },
+      { json: { id: "c", internalDate: "3000" } },
+    );
+    const dates = await workspace(f).messageDates(["a", "b", "c"]);
+    expect([...dates]).toEqual([
+      ["a", 1000],
+      ["c", 3000],
+    ]);
+  });
+
   it("listMessageIds segue as páginas até ao limite", async () => {
     const f = fakeFetch(
       { json: { messages: [{ id: "1" }, { id: "2" }], nextPageToken: "p2" } },

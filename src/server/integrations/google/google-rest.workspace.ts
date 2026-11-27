@@ -284,13 +284,19 @@ export class GoogleRestWorkspace implements GoogleWorkspace {
     for (let i = 0; i < ids.length; i += 10)
       await Promise.all(
         ids.slice(i, i + 10).map(async (id) => {
-          const m = await this.call(`${GMAIL}/messages/${encodeURIComponent(id)}`, {
-            // `minimal` não promete o internalDate; `metadata` traz o recurso Message com ele
-            // (e `fields` corta a resposta a só isso).
-            query: { format: "metadata", fields: "id,internalDate" },
-          });
-          const at = Number(m?.internalDate);
-          if (Number.isFinite(at)) dates.set(id, at);
+          // Um email cuja data não se consegue ler fica sem ela (vai para o fim da fila e é
+          // lido à parte): não pode impedir a leitura do resto da caixa.
+          try {
+            const m = await this.call(`${GMAIL}/messages/${encodeURIComponent(id)}`, {
+              // `minimal` não promete o internalDate; `metadata` traz o recurso Message com ele
+              // (e `fields` corta a resposta a só isso).
+              query: { format: "metadata", fields: "id,internalDate" },
+            });
+            const at = Number(m?.internalDate);
+            if (Number.isFinite(at)) dates.set(id, at);
+          } catch {
+            // Sem data: ordena-se no fim.
+          }
         }),
       );
     return dates;

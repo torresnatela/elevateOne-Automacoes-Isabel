@@ -21,6 +21,9 @@ const when = (iso: string | null) =>
 export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // À espera do fim da corrida pedida: o botão fica parado, para um segundo pedido não trocar
+  // o ponto de partida da espera (o servidor recusava-o na mesma: só corre uma de cada vez).
+  const [waiting, setWaiting] = useState(false);
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -53,12 +56,14 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
       }
       if (gone.current) return;
       if (finished) {
+        setWaiting(false);
         setMessage({ error: false, text: "Sincronização concluída." });
         router.refresh();
         return;
       }
       // Passou o tempo sem se ver o fim: não se diz que acabou.
       if (Date.now() - startedAt > POLL_MAX_MS) {
+        setWaiting(false);
         setMessage({
           error: true,
           text: "Não foi possível confirmar que a sincronização acabou. Atualize a página daqui a pouco.",
@@ -94,6 +99,7 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         text: "O agente começou a ler os emails. A página atualiza-se quando acabar.",
       });
       if (timer.current) clearTimeout(timer.current);
+      setWaiting(true);
       waitForRun(new Map(current.map((m) => [m.mailbox, m.lastRunAt])), Date.now());
     } catch (e) {
       setMessage({ error: true, text: (e as Error).message });
@@ -114,10 +120,10 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         <button
           type="button"
           className="botao primario"
-          disabled={busy || mailboxes.length === 0}
+          disabled={busy || waiting || mailboxes.length === 0}
           onClick={syncNow}
         >
-          Sincronizar agora
+          {waiting ? "A sincronizar…" : "Sincronizar agora"}
         </button>
       </div>
       {mailboxes.length === 0 ? (
