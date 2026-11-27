@@ -146,6 +146,7 @@ describe("PrismaClientMailRepository", () => {
       {
         googleAccountId: account.id,
         syncedUntil: new Date(),
+        startFrom: null,
         lastRunAt: new Date(),
         lastError: null,
       },
@@ -156,6 +157,37 @@ describe("PrismaClientMailRepository", () => {
       invoices: 0,
     });
     expect(await repo.hasRfcMessageId("<m1@alfa.pt>")).toBe(false);
+  });
+
+  it("uma troca de caixa a meio faz a escrita da corrida antiga esperar e desistir", async () => {
+    const { account } = await fixtures();
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    // Outra ligação trinca a conta e troca a caixa, como faz o save do repositório das contas.
+    const swap = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "google_accounts" WHERE "id" = ${account.id}::uuid FOR UPDATE`;
+      locked();
+      await held;
+      await tx.googleAccount.update({ where: { id: account.id }, data: { email: "nova@x.pt" } });
+    });
+    await isLocked;
+    const write = repo.setSyncState(
+      {
+        googleAccountId: account.id,
+        syncedUntil: new Date(),
+        startFrom: null,
+        lastRunAt: new Date(),
+        lastError: null,
+      },
+      "isabel@x.pt",
+    );
+    // A escrita está à espera do trinco; ao soltar, vê a caixa nova e não grava.
+    await new Promise((r) => setTimeout(r, 200));
+    release();
+    await Promise.all([swap, write]);
+    expect(await repo.getSyncState(account.id)).toBeNull();
   });
 
   it("o mesmo email (Message-ID) não se guarda duas vezes", async () => {
@@ -183,6 +215,7 @@ describe("PrismaClientMailRepository", () => {
     const state = {
       googleAccountId: account.id,
       syncedUntil: new Date("2026-11-25T10:00:00Z"),
+      startFrom: null,
       lastRunAt: new Date("2026-11-25T10:00:00Z"),
       lastError: null,
     };

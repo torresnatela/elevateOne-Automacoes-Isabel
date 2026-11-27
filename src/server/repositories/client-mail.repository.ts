@@ -74,6 +74,8 @@ export interface InvoiceSource {
 export interface MailSyncStateRecord {
   googleAccountId: string;
   syncedUntil: Date | null;
+  /** O início fixo da janela da primeira leitura (enquanto `syncedUntil` é null). */
+  startFrom: Date | null;
   lastRunAt: Date | null;
   lastError: string | null;
 }
@@ -133,6 +135,9 @@ const range = (from?: Date, to?: Date, instant = false) => ({
 
 /** A conta Google ainda é esta caixa (quem a ligou não a trocou por outra). */
 async function sameMailbox(tx: Prisma.TransactionClient, googleAccountId: string, mailbox: string) {
+  // Trinca a linha da conta até ao fim da transação: ligar outra caixa (que trinca a mesma linha
+  // antes de limpar) espera por esta escrita, ou esta vê já a caixa nova. Não há meio-termo.
+  await tx.$queryRaw`SELECT 1 FROM "google_accounts" WHERE "id" = ${googleAccountId}::uuid FOR UPDATE`;
   const account = await tx.googleAccount.findUnique({
     where: { id: googleAccountId },
     select: { email: true },

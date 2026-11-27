@@ -29,7 +29,7 @@ const email = (id: string, over: Partial<EmailMessage> = {}): EmailMessage => ({
   ...over,
 });
 
-async function setup() {
+async function setup(clock: () => Date = () => NOW) {
   const clients = new FakeClientRepository();
   const alfa = await clients.create(
     clientSchema.parse({ name: "Alfa", nif: "123456789", contactEmails: ["faturas@alfa.pt"] }),
@@ -78,7 +78,7 @@ async function setup() {
       clients,
       mail,
       extractor,
-      now: () => NOW,
+      now: clock,
     },
     {
       maxEmailsPerRun: 3,
@@ -241,7 +241,20 @@ it("discover divide a janela ao meio quando a procura enche, até encontrar tudo
   expect(queries[0]).toContain("from:(a@x.pt) after:");
 });
 
-it("discover diz que ficou a faltar quando um só dia enche", async () => {
+it("discover percorre todo um dia com mais emails do que o máximo de uma procura", async () => {
+  const day = Array.from({ length: 23 }, (_, i) => `d${i}`);
+  const limits: number[] = [];
+  const list = async (_q: string, limit: number) => {
+    limits.push(limit);
+    return day.slice(0, limit);
+  };
+  const from = new Date("2026-11-01T00:00:00Z");
+  const result = await discover(list, "q", from, new Date("2026-11-01T20:00:00Z"), 5, 100);
+  expect(result).toEqual({ ids: day, truncated: false });
+  expect(limits).toEqual([5, 100]);
+});
+
+it("discover só diz que ficou a faltar quando um dia passa até do máximo por dia", async () => {
   const list = async (_q: string, limit: number) =>
     Array.from({ length: limit }, (_, i) => `x${i}`);
   const result = await discover(
@@ -250,6 +263,7 @@ it("discover diz que ficou a faltar quando um só dia enche", async () => {
     new Date("2026-11-01T00:00:00Z"),
     new Date("2026-11-03T00:00:00Z"),
     5,
+    20,
   );
   expect(result.truncated).toBe(true);
 });
@@ -294,8 +308,9 @@ it("um email com anexos que não cabem num pedido é lido em vários, e as fatur
 it("não dá a caixa por lida quando a procura devolve o máximo de ids", async () => {
   const { service, addEmail, mail, workspaces } = await setup();
   addEmail("u1", email("m1"));
-  const ids = Array.from({ length: 100 }, (_, i) => (i === 0 ? "m1" : `x${i}`));
-  workspaces.get("u1")!.listMessageIds = async () => ids;
+  // Cada procura enche sempre, até a de um dia inteiro (o máximo por dia é 10× o de uma procura).
+  const ids = Array.from({ length: 1000 }, (_, i) => (i === 0 ? "m1" : `x${i}`));
+  workspaces.get("u1")!.listMessageIds = async (_q: string, limit: number) => ids.slice(0, limit);
   // Todos já vistos: nada fica pendente, só a procura cortada impede de dar a caixa por lida.
   await mail.markSeen("acc1", ids);
   workspaces.get("u1")!.getEmail = async (id: string) =>
@@ -304,4 +319,45 @@ it("não dá a caixa por lida quando a procura devolve o máximo de ids", async 
   expect(report.accounts[0].pending).toBe(0);
   expect(report.accounts[0].error).toContain("num só dia");
   expect(mail.states.get("acc1")?.syncedUntil).toBeNull();
+});
+
+it("na primeira leitura, o início da janela não anda com o tempo entre corridas", async () => {
+  let now = NOW;
+  const { service, workspaces, mail, addEmail, extractor } = await setup(() => now);
+  addEmail("u1", email("m1"));
+  extractor.failOn.add("Assunto m1"); // a primeira leitura não acaba
+  const queries: string[] = [];
+  const ws = workspaces.get("u1")!;
+  const list = ws.listMessageIds.bind(ws);
+  ws.listMessageIds = async (q: string, limit: number) => {
+    queries.push(q);
+    return list(q, limit);
+  };
+  await service.run();
+  const start = mail.states.get("acc1")?.startFrom;
+  expect(start).toEqual(new Date(NOW.getTime() - 90 * 24 * 60 * 60_000));
+  expect(mail.states.get("acc1")?.syncedUntil).toBeNull();
+
+  now = new Date(NOW.getTime() + 5 * 24 * 60 * 60_000); // cinco dias depois
+  queries.length = 0;
+  await service.run();
+  const after = Math.floor(start!.getTime() / 1000);
+  expect(queries.every((q) => q.includes(`after:${after}`))).toBe(true);
+  expect(mail.states.get("acc1")?.startFrom).toEqual(start);
+});
+
+it("o aviso da procura cortada junta-se ao erro de um email", async () => {
+  const { service, addEmail, extractor, workspaces } = await setup();
+  addEmail("u1", email("m1", { subject: "falha" }));
+  extractor.failOn.add("falha");
+  const ws = workspaces.get("u1")!;
+  const filler = Array.from({ length: 1000 }, (_, i) => `x${i}`);
+  ws.listMessageIds = async (_q: string, limit: number) => ["m1", ...filler].slice(0, limit);
+  ws.getEmail = async (id: string) =>
+    id === "m1"
+      ? email("m1", { subject: "falha" })
+      : email(id, { from: "alguem@fora.pt", attachments: [] });
+  const report = await service.run();
+  expect(report.accounts[0].error).toContain("O modelo falhou.");
+  expect(report.accounts[0].error).toContain("num só dia");
 });

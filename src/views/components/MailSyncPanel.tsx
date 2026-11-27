@@ -24,27 +24,34 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ao sair da página, deixa de perguntar.
-  useEffect(
-    () => () => {
+  // Ao sair da página, deixa de perguntar: um pedido que ainda estava a caminho, ao voltar,
+  // vê a marca e não agenda outro nem mexe na página.
+  const gone = useRef(false);
+  useEffect(() => {
+    gone.current = false;
+    return () => {
+      gone.current = true;
       if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+    };
+  }, []);
 
   /** Pergunta até todas as caixas terem uma corrida nova (ou o tempo acabar), e atualiza a página. */
   function waitForRun(before: Map<string, string | null>, startedAt: number) {
     timer.current = setTimeout(async () => {
+      if (gone.current) return;
       let finished = false;
       try {
         const { mailboxes: now } = await api<{ mailboxes: MailboxView[] }>(
           "/api/clients/sync",
           "GET",
         );
-        finished = now.every((m) => m.lastRunAt !== null && m.lastRunAt !== before.get(m.mailbox));
+        finished =
+          now.length > 0 &&
+          now.every((m) => m.lastRunAt !== null && m.lastRunAt !== before.get(m.mailbox));
       } catch {
         // Uma falha de rede numa pergunta não para a espera.
       }
+      if (gone.current) return;
       if (finished) {
         setMessage({ error: false, text: "Sincronização concluída." });
         router.refresh();
@@ -73,6 +80,14 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         "/api/clients/sync",
         "GET",
       );
+      // Sem caixas ligadas não há corrida para ver acabar: não se diz que sincronizou.
+      if (current.length === 0) {
+        setMessage({
+          error: true,
+          text: "Não há contas Google ligadas. Ligue uma em Integrações para o agente ler os emails.",
+        });
+        return;
+      }
       await api("/api/clients/sync", "POST");
       setMessage({
         error: false,
@@ -96,7 +111,12 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
             Lê, de hora a hora, os emails dos clientes nas contas Google ligadas em Integrações.
           </p>
         </div>
-        <button type="button" className="botao primario" disabled={busy} onClick={syncNow}>
+        <button
+          type="button"
+          className="botao primario"
+          disabled={busy || mailboxes.length === 0}
+          onClick={syncNow}
+        >
           Sincronizar agora
         </button>
       </div>

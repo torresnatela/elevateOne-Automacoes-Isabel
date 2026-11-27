@@ -77,8 +77,9 @@ const epoch = (d: Date) => Math.floor(d.getTime() / 1000);
 
 /**
  * Todos os ids de uma procura entre duas datas. O Gmail devolve só os mais recentes até ao
- * máximo pedido: quando a janela enche, divide-se ao meio até cada metade caber. Devolve
- * também se ficou alguma janela de um dia que, mesmo assim, não coube (aí faltam emails).
+ * máximo pedido: quando a janela enche, divide-se ao meio até cada metade caber. Uma janela de
+ * um dia que ainda enche percorre-se toda, página a página, até `dayMax`. Devolve também se,
+ * mesmo assim, ficou um dia por percorrer (só com mais de `dayMax` emails nesse dia).
  */
 export async function discover(
   list: (query: string, limit: number) => Promise<string[]>,
@@ -86,17 +87,22 @@ export async function discover(
   from: Date,
   to: Date,
   max: number,
+  dayMax: number = max * 10,
 ): Promise<{ ids: string[]; truncated: boolean }> {
-  const found = await list(`${query} after:${epoch(from)} before:${epoch(to)}`, max);
+  const window = `${query} after:${epoch(from)} before:${epoch(to)}`;
+  const found = await list(window, max);
   if (found.length < max) return { ids: found, truncated: false };
-  if (to.getTime() - from.getTime() <= DAY_MS) return { ids: found, truncated: true };
+  if (to.getTime() - from.getTime() <= DAY_MS) {
+    const all = await list(window, dayMax);
+    return { ids: all, truncated: all.length >= dayMax };
+  }
   const middle = new Date(
     Math.floor((from.getTime() + (to.getTime() - from.getTime()) / 2) / 1000) * 1000,
   );
   // As metades sobrepõem-se um segundo, para um email no instante do meio entrar numa delas.
   const [older, newer] = await Promise.all([
-    discover(list, query, from, new Date(middle.getTime() + 1000), max),
-    discover(list, query, middle, to, max),
+    discover(list, query, from, new Date(middle.getTime() + 1000), max, dayMax),
+    discover(list, query, middle, to, max, dayMax),
   ]);
   return { ids: [...older.ids, ...newer.ids], truncated: older.truncated || newer.truncated };
 }
@@ -203,9 +209,11 @@ export class ClientMailSyncService {
     const startedAt = this.now();
     const state = await this.deps.mail.getSyncState(account.id);
     // Um dia de folga: o «after:» do Gmail conta por dias e os emails chegam com atraso.
-    const since = state?.syncedUntil
-      ? new Date(state.syncedUntil.getTime() - DAY_MS)
-      : new Date(startedAt.getTime() - this.options.lookbackDays * DAY_MS);
+    // Na primeira leitura, o início da janela fica guardado até ela acabar: se andasse com o
+    // tempo, um email ainda por descobrir podia sair da janela.
+    const startFrom =
+      state?.startFrom ?? new Date(startedAt.getTime() - this.options.lookbackDays * DAY_MS);
+    const since = state?.syncedUntil ? new Date(state.syncedUntil.getTime() - DAY_MS) : startFrom;
     let failures = 0;
 
     try {
@@ -216,6 +224,7 @@ export class ClientMailSyncService {
           startedAt,
           state?.syncedUntil ?? null,
           null,
+          startFrom,
         );
         return report;
       }
@@ -263,14 +272,21 @@ export class ClientMailSyncService {
       // Só se avança a marca quando tudo até agora ficou tratado.
       // Uma procura que devolveu o máximo pode ter deixado emails mais antigos por descobrir.
       const done = failures === 0 && report.pending === 0 && !truncated;
-      if (truncated && !report.error)
-        report.error = `Há mais de ${this.options.maxDiscovered} emails de clientes num só dia: alguns podem ter ficado por ler.`;
+      // O aviso da procura cortada junta-se ao erro de um email, não o substitui.
+      if (truncated)
+        report.error = [
+          report.error,
+          `Há emails de clientes demais num só dia: alguns podem ter ficado por ler.`,
+        ]
+          .filter(Boolean)
+          .join(" ");
       await this.saveState(
         account.id,
         account.email,
         startedAt,
         done ? startedAt : (state?.syncedUntil ?? null),
         report.error,
+        startFrom,
       );
     } catch (err) {
       report.error = (err as Error).message;
@@ -280,6 +296,7 @@ export class ClientMailSyncService {
         startedAt,
         state?.syncedUntil ?? null,
         report.error,
+        startFrom,
       );
     }
     return report;
@@ -291,9 +308,10 @@ export class ClientMailSyncService {
     lastRunAt: Date,
     syncedUntil: Date | null,
     lastError: string | null,
+    startFrom: Date | null,
   ) {
     return this.deps.mail.setSyncState(
-      { googleAccountId, lastRunAt, syncedUntil, lastError },
+      { googleAccountId, lastRunAt, syncedUntil, lastError, startFrom },
       mailbox,
     );
   }

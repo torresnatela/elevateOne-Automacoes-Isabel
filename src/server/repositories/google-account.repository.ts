@@ -47,6 +47,9 @@ export class PrismaGoogleAccountRepository implements GoogleAccountRepository {
   async save(account: GoogleAccountData) {
     const { userId, ...data } = account;
     return this.db.$transaction(async (tx) => {
+      // A mesma linha que o agente de faturas trinca antes de gravar: uma corrida a meio
+      // termina a escrita antes desta limpeza, ou só escreve depois de ver a caixa nova.
+      await tx.$queryRaw`SELECT 1 FROM "google_accounts" WHERE "user_id" = ${userId}::uuid FOR UPDATE`;
       const previous = await tx.googleAccount.findUnique({ where: { userId } });
       // Outra caixa no lugar da anterior: o agente de faturas começa do zero nela, e os emails
       // já guardados deixam de apontar para esta conta (os anexos estão na caixa antiga).

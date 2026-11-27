@@ -385,6 +385,9 @@ model MailSyncState {
   googleAccountId String        @id @map("google_account_id") @db.Uuid
   /// Os emails até aqui já foram todos vistos.
   syncedUntil     DateTime?     @map("synced_until")
+  /// Na primeira leitura (ainda sem `syncedUntil`), o início fixo da janela: não anda com o tempo
+  /// entre corridas, para nenhum email por descobrir sair dela.
+  startFrom       DateTime?     @map("start_from")
   lastRunAt       DateTime?     @map("last_run_at")
   lastError       String?       @map("last_error")
   googleAccount   GoogleAccount @relation(fields: [googleAccountId], references: [id], onDelete: Cascade)

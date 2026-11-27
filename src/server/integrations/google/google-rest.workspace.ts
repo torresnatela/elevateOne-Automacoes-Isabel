@@ -285,7 +285,9 @@ export class GoogleRestWorkspace implements GoogleWorkspace {
       await Promise.all(
         ids.slice(i, i + 10).map(async (id) => {
           const m = await this.call(`${GMAIL}/messages/${encodeURIComponent(id)}`, {
-            query: { format: "minimal", fields: "id,internalDate" },
+            // `minimal` não promete o internalDate; `metadata` traz o recurso Message com ele
+            // (e `fields` corta a resposta a só isso).
+            query: { format: "metadata", fields: "id,internalDate" },
           });
           const at = Number(m?.internalDate);
           if (Number.isFinite(at)) dates.set(id, at);
