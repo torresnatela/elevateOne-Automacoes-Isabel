@@ -94,9 +94,9 @@ export interface ClientMailRepository {
   listSyncStates(): Promise<MailSyncStateRecord[]>;
   /**
    * Guarda até onde se leu. Com `mailbox`, só guarda se a conta ainda for essa caixa: se a
-   * pessoa ligou outra a meio da corrida, a caixa nova não herda a marca da antiga.
+   * pessoa ligou outra a meio da corrida, a caixa nova não herda a marca da antiga. Diz se gravou.
    */
-  setSyncState(state: MailSyncStateRecord, mailbox?: string): Promise<void>;
+  setSyncState(state: MailSyncStateRecord, mailbox?: string): Promise<boolean>;
 
   /** Fica com o trinco se estiver livre (ou expirado). */
   tryLock(name: string, ttlMs: number): Promise<boolean>;
@@ -263,13 +263,14 @@ export class PrismaClientMailRepository implements ClientMailRepository {
 
   async setSyncState(state: MailSyncStateRecord, mailbox?: string) {
     const { googleAccountId, ...data } = state;
-    await this.db.$transaction(async (tx) => {
-      if (mailbox && !(await sameMailbox(tx, googleAccountId, mailbox))) return;
+    return this.db.$transaction(async (tx) => {
+      if (mailbox && !(await sameMailbox(tx, googleAccountId, mailbox))) return false;
       await tx.mailSyncState.upsert({
         where: { googleAccountId },
         update: data,
         create: state,
       });
+      return true;
     });
   }
 

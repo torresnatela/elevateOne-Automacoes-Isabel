@@ -41,6 +41,7 @@ export class FakeClientMailRepository implements ClientMailRepository {
   }
   async setSyncState(state: MailSyncStateRecord) {
     this.states.set(state.googleAccountId, state);
+    return true;
   }
   async tryLock() {
     if (this.locked) return false;

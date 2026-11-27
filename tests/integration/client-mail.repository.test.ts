@@ -195,15 +195,32 @@ describe("PrismaClientMailRepository", () => {
     const accounts = new PrismaGoogleAccountRepository(prisma);
     const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+    /** Quantas ligações estão à espera de um trinco nesta base (as que fazem fila na conta). */
+    const waiters = async () =>
+      Number(
+        (
+          await prisma.$queryRaw<{ n: bigint }[]>`
+            SELECT count(*) AS n FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'
+              AND query ILIKE '%google_accounts%FOR UPDATE%'`
+        )[0].n,
+      );
+
+    /** Espera até `n` ligações estarem na fila do trinco (sem tempos fixos). */
+    async function queued(n: number) {
+      for (let i = 0; i < 200 && (await waiters()) < n; i++) await pause(10);
+      expect(await waiters()).toBe(n);
+    }
+
     /**
-     * Segura o trinco da conta noutra ligação, põe `first` e depois `second` na fila do trinco
-     * (o Postgres serve-os por ordem de chegada) e solta: corre os dois nessa ordem.
+     * Segura o trinco da conta noutra ligação, põe `first` na fila, confirma que entrou, põe
+     * `second` atrás dele, confirma, e só então solta: o Postgres serve-os por essa ordem.
      */
-    async function inOrder(
+    async function inOrder<A, B>(
       accountId: string,
-      first: () => Promise<unknown>,
-      second: () => Promise<unknown>,
-    ) {
+      first: () => Promise<A>,
+      second: () => Promise<B>,
+    ): Promise<[A, B]> {
       let release!: () => void;
       const held = new Promise<void>((r) => (release = r));
       let locked!: () => void;
@@ -215,11 +232,12 @@ describe("PrismaClientMailRepository", () => {
       });
       await isLocked;
       const a = first();
-      await pause(150);
+      await queued(1);
       const b = second();
-      await pause(150);
+      await queued(2);
       release();
-      await Promise.all([holder, a, b]);
+      const [, ra, rb] = await Promise.all([holder, a, b]);
+      return [ra, rb];
     }
 
     const state = (googleAccountId: string) => ({
@@ -238,8 +256,12 @@ describe("PrismaClientMailRepository", () => {
         const { account, user } = await fixtures();
         const write = () => repo.setSyncState(state(account.id), "isabel@x.pt");
         const swap = () => switchMailbox(user.id);
-        if (order === "escrita primeiro") await inOrder(account.id, write, swap);
-        else await inOrder(account.id, swap, write);
+        // A escrita só grava quando corre antes da troca: confirma a ordem que de facto correu.
+        const wrote =
+          order === "escrita primeiro"
+            ? (await inOrder(account.id, write, swap))[0]
+            : (await inOrder(account.id, swap, write))[1];
+        expect(wrote).toBe(order === "escrita primeiro");
         expect(await repo.getSyncState(account.id)).toBeNull();
       },
     );
@@ -250,8 +272,12 @@ describe("PrismaClientMailRepository", () => {
         const { account, client, user } = await fixtures();
         const write = () => repo.saveEmail(newEmail(client.id, account.id), [newInvoice]);
         const swap = () => switchMailbox(user.id);
-        if (order === "escrita primeiro") await inOrder(account.id, write, swap);
-        else await inOrder(account.id, swap, write);
+        const saved =
+          order === "escrita primeiro"
+            ? (await inOrder(account.id, write, swap))[0]
+            : (await inOrder(account.id, swap, write))[1];
+        // Guardou (e a troca depois limpou) só quando a escrita correu primeiro.
+        expect(saved).toEqual({ invoices: order === "escrita primeiro" ? 1 : 0 });
         expect(await prisma.clientEmail.count({ where: { googleAccountId: account.id } })).toBe(0);
         expect(await prisma.mailSeenMessage.count({ where: { googleAccountId: account.id } })).toBe(
           0,
