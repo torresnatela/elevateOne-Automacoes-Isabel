@@ -187,8 +187,25 @@ export class ClientMailSyncService {
     try {
       return await this.runLocked();
     } finally {
-      await this.deps.mail.unlock(LOCK);
+      await this.release();
     }
+  }
+
+  /** Falhou também a gravação do erro da corrida: o trinco fica até expirar (ver `release`). */
+  private unrecordedFailure = false;
+
+  /**
+   * Solta o trinco — exceto se a corrida falhou e nem o erro se conseguiu gravar. Aí o trinco
+   * fica até expirar sozinho (LOCK_TTL_MS): quem espera nunca vê uma corrida acabada sem
+   * resultado (o que leria como «concluída»), e o painel acaba a dizer que não pôde confirmar.
+   */
+  private async release() {
+    if (this.unrecordedFailure) {
+      this.unrecordedFailure = false;
+      this.deps.log?.("Faturas: a corrida falhou e o erro não se gravou; o trinco expira sozinho.");
+      return;
+    }
+    await this.deps.mail.unlock(LOCK);
   }
 
   /**
@@ -205,7 +222,7 @@ export class ClientMailSyncService {
       } catch (error) {
         this.deps.log?.(`Faturas: a corrida falhou: ${(error as Error).message}`);
       } finally {
-        await this.deps.mail.unlock(LOCK);
+        await this.release();
       }
     });
     return true;
@@ -225,7 +242,8 @@ export class ClientMailSyncService {
         for (const account of await this.deps.accounts.listAll())
           await this.deps.mail.recordRunError(account.id, message);
       } catch {
-        // Sem base de dados nem isto se grava; o erro original segue na mesma.
+        // Nem o erro se gravou: o trinco fica até expirar, para ninguém ver «concluída».
+        this.unrecordedFailure = true;
       }
       throw error;
     }

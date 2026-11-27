@@ -230,6 +230,23 @@ describe("ClientMailSyncService", () => {
     expect(mail.locked).toBe(false);
   });
 
+  it("se nem o erro da corrida se grava, o trinco fica (expira sozinho) em vez de parecer concluída", async () => {
+    const { mail, service, clients } = await setup();
+    vi.spyOn(clients, "list").mockRejectedValue(new Error("base em baixo"));
+    vi.spyOn(mail, "recordRunError").mockRejectedValue(new Error("base em baixo"));
+    let task: (() => Promise<void>) | null = null;
+    await service.start((t) => (task = t));
+    await task!();
+    // Quem espera continua a ver uma corrida a decorrer, não uma corrida acabada sem resultado.
+    expect(await service.isRunning()).toBe(true);
+    expect(mail.states.size).toBe(0);
+    // A seguinte, já com a base de volta, corre normalmente depois de o trinco expirar.
+    mail.locked = false;
+    vi.restoreAllMocks();
+    await expect(service.run()).resolves.toMatchObject({ skipped: false });
+    expect(mail.locked).toBe(false);
+  });
+
   it("start solta o trinco mesmo quando a corrida falha", async () => {
     const { mail, service, workspaces } = await setup();
     let task: (() => Promise<void>) | null = null;
