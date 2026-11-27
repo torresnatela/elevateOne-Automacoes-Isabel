@@ -58,8 +58,17 @@ export class FakeClientMailRepository implements ClientMailRepository {
     this.locked = true;
     return true;
   }
+  /** Um trinco que ficou por soltar e expirou. */
+  expired = false;
   async isLocked() {
     return this.locked;
+  }
+  async lockState() {
+    return this.locked
+      ? ("held" as const)
+      : this.expired
+        ? ("expired" as const)
+        : ("free" as const);
   }
   async unlock() {
     this.locked = false;

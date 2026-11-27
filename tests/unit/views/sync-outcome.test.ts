@@ -50,4 +50,10 @@ describe("syncOutcome", () => {
     expect(syncOutcome(false, [box("a@x.pt", "t1")], [box("a@x.pt", "t1")]).ok).toBe(true);
     expect(syncOutcome(false, [box("a@x.pt", "t1")], [box("a@x.pt", "t2", "x")]).ok).toBe(false);
   });
+
+  it("um trinco que expirou sem se soltar nunca dá «concluída», mesmo sem erros nas caixas", () => {
+    const outcome = syncOutcome(false, [box("a@x.pt", "t1")], [box("a@x.pt", "t1")], true);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.text).toContain("não foi possível confirmar");
+  });
 });

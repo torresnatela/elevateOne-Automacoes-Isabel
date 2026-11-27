@@ -71,6 +71,8 @@ export interface InvoiceSource {
   attachmentPartId: string;
 }
 
+export type LockState = "held" | "free" | "expired";
+
 export interface MailSyncStateRecord {
   googleAccountId: string;
   syncedUntil: Date | null;
@@ -109,6 +111,11 @@ export interface ClientMailRepository {
   unlock(name: string): Promise<void>;
   /** O trinco está seguro (e não expirou): a tarefa está a correr. */
   isLocked(name: string): Promise<boolean>;
+  /**
+   * `held`: a tarefa está a correr. `free`: acabou e soltou o trinco. `expired`: o trinco ficou
+   * por soltar e expirou — a tarefa não acabou bem (nem conseguiu gravar o resultado).
+   */
+  lockState(name: string): Promise<LockState>;
 
   listEmails(clientId: string, limit?: number): Promise<ClientEmailRecord[]>;
   listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]>;
@@ -299,11 +306,16 @@ export class PrismaClientMailRepository implements ClientMailRepository {
   }
 
   async isLocked(name: string) {
+    return (await this.lockState(name)) === "held";
+  }
+
+  async lockState(name: string): Promise<LockState> {
     // Compara no SQL com now(), como o tryLock: a coluna não tem fuso e lê-la pelo Prisma (em
     // UTC) daria outra hora que a que o SQL escreveu.
-    const rows = await this.db.$queryRaw<{ name: string }[]>`
-      SELECT "name" FROM "job_locks" WHERE "name" = ${name} AND "locked_until" > now()`;
-    return rows.length > 0;
+    const rows = await this.db.$queryRaw<{ held: boolean }[]>`
+      SELECT "locked_until" > now() AS held FROM "job_locks" WHERE "name" = ${name}`;
+    if (rows.length === 0) return "free";
+    return rows[0].held ? "held" : "expired";
   }
 
   async unlock(name: string) {

@@ -56,9 +56,14 @@ export class ClientMailController {
       // Primeiro o trinco, depois as caixas (nunca em paralelo): a corrida grava o resultado —
       // incluindo a falha — antes de soltar o trinco, por isso, se aqui se vê que já não corre,
       // as caixas lidas a seguir já trazem esse resultado.
-      const running = await this.sync.isRunning();
+      const state = await this.sync.runState();
       const mailboxes = await this.mail.mailboxes();
-      return NextResponse.json({ mailboxes, running });
+      // `abandoned`: a última corrida não acabou bem e nem gravou o resultado (o trinco expirou).
+      return NextResponse.json({
+        mailboxes,
+        running: state === "running",
+        abandoned: state === "abandoned",
+      });
     } catch (err) {
       return handleError(err);
     }

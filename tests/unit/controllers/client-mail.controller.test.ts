@@ -27,11 +27,11 @@ describe("ClientMailController.status", () => {
     ];
     const order: string[] = [];
     const sync = {
-      isRunning: async () => {
+      runState: async () => {
         order.push("trinco");
         await Promise.resolve();
         state = [{ ...state[0], lastError: "A corrida falhou: base em baixo" }];
-        return false;
+        return "idle";
       },
     } as unknown as ClientMailSyncService;
     const mail = {
@@ -51,8 +51,22 @@ describe("ClientMailController.status", () => {
     expect(order).toEqual(["trinco", "caixas"]);
     expect(await res.json()).toMatchObject({
       running: false,
+      abandoned: false,
       mailboxes: [{ lastError: "A corrida falhou: base em baixo" }],
     });
+  });
+
+  it("diz quando a última corrida ficou abandonada (o trinco expirou sem se soltar)", async () => {
+    const sync = { runState: async () => "abandoned" } as unknown as ClientMailSyncService;
+    const mail = { mailboxes: async () => [] } as unknown as ClientMailService;
+    const controller = new ClientMailController(
+      mail,
+      sync,
+      () => undefined,
+      () => undefined,
+    );
+    const res = await controller.status(await request());
+    expect(await res.json()).toMatchObject({ running: false, abandoned: true });
   });
 
   it("o botão diz se começou a corrida", async () => {

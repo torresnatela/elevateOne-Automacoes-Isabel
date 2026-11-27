@@ -48,19 +48,24 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
     timer.current = setTimeout(async () => {
       if (gone.current) return;
       let after: MailboxView[] | null = null;
+      let abandoned = false;
       try {
-        const status = await api<{ running: boolean; mailboxes: MailboxView[] }>(
-          "/api/clients/sync",
-          "GET",
-        );
-        if (!status.running) after = status.mailboxes;
+        const status = await api<{
+          running: boolean;
+          abandoned: boolean;
+          mailboxes: MailboxView[];
+        }>("/api/clients/sync", "GET");
+        if (!status.running) {
+          after = status.mailboxes;
+          abandoned = status.abandoned;
+        }
       } catch {
         // Uma falha de rede numa pergunta não para a espera.
       }
       if (gone.current) return;
       if (after) {
         // O trinco soltou-se: vê-se se a corrida leu mesmo as caixas, ou se falhou.
-        const outcome = syncOutcome(started, before, after);
+        const outcome = syncOutcome(started, before, after, abandoned);
         setWaiting(false);
         setMessage({ error: !outcome.ok, text: outcome.text });
         router.refresh();

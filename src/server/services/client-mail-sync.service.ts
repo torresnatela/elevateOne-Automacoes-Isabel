@@ -182,6 +182,15 @@ export class ClientMailSyncService {
     return this.deps.mail.isLocked(LOCK);
   }
 
+  /**
+   * Como está a tarefa: a correr, livre (a última acabou e gravou o resultado), ou abandonada
+   * (o trinco expirou sem se soltar: a última corrida falhou sem conseguir gravar o erro).
+   */
+  async runState(): Promise<"running" | "idle" | "abandoned"> {
+    const state = await this.deps.mail.lockState(LOCK);
+    return state === "held" ? "running" : state === "free" ? "idle" : "abandoned";
+  }
+
   async run(): Promise<SyncReport> {
     if (!(await this.deps.mail.tryLock(LOCK, LOCK_TTL_MS))) return { skipped: true, accounts: [] };
     try {

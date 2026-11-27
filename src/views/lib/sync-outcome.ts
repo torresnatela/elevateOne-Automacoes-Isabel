@@ -17,7 +17,14 @@ export function syncOutcome(
   started: boolean,
   before: MailboxRun[],
   after: MailboxRun[],
+  /** O trinco expirou sem se soltar: a corrida não acabou bem nem gravou o resultado. */
+  abandoned = false,
 ): SyncOutcome {
+  if (abandoned)
+    return {
+      ok: false,
+      text: "A corrida não terminou bem e não foi possível confirmar o resultado. Tente de novo daqui a pouco.",
+    };
   const previous = new Map(before.map((m) => [m.mailbox, m.lastRunAt]));
   const unread = started
     ? after.filter((m) => m.lastRunAt === null || m.lastRunAt === previous.get(m.mailbox))
