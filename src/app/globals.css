@@ -1330,3 +1330,32 @@ a.lista-linha:hover {
   align-items: start;
   gap: 16px;
 }
+
+/* ── separadores ─────────────────────────────────────────────────────── */
+.separadores {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--cor-borda);
+}
+.separador {
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--cor-texto-2);
+  font-weight: var(--peso-medio);
+  white-space: nowrap;
+}
+.separador:hover {
+  color: var(--cor-texto);
+}
+.separador[aria-current="page"] {
+  border-bottom-color: var(--cor-destaque);
+  color: var(--cor-texto);
+}
+
+/* ── filtros ─────────────────────────────────────────────────────────── */
+.filtros > .entrada {
+  flex: 0 1 200px;
+  width: auto;
+  min-width: 140px;
+}

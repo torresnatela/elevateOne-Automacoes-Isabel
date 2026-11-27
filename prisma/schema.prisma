@@ -27,6 +27,7 @@ model User {
   knowledgeDocuments KnowledgeDocument[]
   googleAccount      GoogleAccount?
   microsoftAccount   MicrosoftAccount?
+  clients            Client[]
 
   @@map("users")
 }
@@ -139,16 +140,19 @@ model AgentSetting {
 
 /// A conta Google que um utilizador ligou (os agentes agem nela em nome dele).
 model GoogleAccount {
-  id                    String   @id @default(uuid()) @db.Uuid
-  userId                String   @unique @map("user_id") @db.Uuid
+  id                    String            @id @default(uuid()) @db.Uuid
+  userId                String            @unique @map("user_id") @db.Uuid
   email                 String
   /// O refresh token, cifrado (AES-256-GCM, chave em ENCRYPTION_KEY).
-  refreshTokenEncrypted String   @map("refresh_token_encrypted")
+  refreshTokenEncrypted String            @map("refresh_token_encrypted")
   /// As permissões que a pessoa deu, separadas por espaços.
   scopes                String
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientEmails          ClientEmail[]
+  mailSyncState         MailSyncState?
+  seenMessages          MailSeenMessage[]
 
   @@map("google_accounts")
 }
@@ -208,4 +212,208 @@ model InboundMessage {
   receivedAt DateTime @default(now()) @map("received_at")
 
   @@map("inbound_messages")
+}
+
+enum ClientEntityType {
+  SOCIEDADE
+  ENI
+  PARTICULAR
+  ASSOCIACAO
+  OUTRO
+}
+
+enum VatRegime {
+  NORMAL_MENSAL
+  NORMAL_TRIMESTRAL
+  ISENTO_ART53
+  PEQUENOS_RETALHISTAS
+  NAO_SUJEITO
+}
+
+enum AccountingRegime {
+  ORGANIZADA
+  SIMPLIFICADO
+  NAO_ORGANIZADA
+}
+
+/**
+ * Um cliente do gabinete: quem é, como se reconhece pelo email e os dados contabilísticos (PT).
+ */
+model Client {
+  id                String            @id @default(uuid()) @db.Uuid
+  /// A denominação (ou o nome, num particular).
+  name              String
+  tradeName         String?           @map("trade_name")
+  /// O NIF/NIPC, 9 dígitos.
+  nif               String?           @unique
+  /// Os endereços de email do cliente, em minúsculas: é por eles que o agente reconhece os emails.
+  contactEmails     String[]          @map("contact_emails")
+  /// Domínios inteiros do cliente (ex.: «empresa.pt»): qualquer remetente desse domínio conta.
+  emailDomains      String[]          @map("email_domains")
+  entityType        ClientEntityType  @default(SOCIEDADE) @map("entity_type")
+  vatRegime         VatRegime?        @map("vat_regime")
+  accountingRegime  AccountingRegime? @map("accounting_regime")
+  /// O CAE principal (5 dígitos).
+  caePrincipal      String?           @map("cae_principal")
+  /// O número de identificação da Segurança Social (11 dígitos).
+  niss              String?
+  address           String?
+  postalCode        String?           @map("postal_code")
+  city              String?
+  country           String            @default("PT")
+  /// O contabilista responsável.
+  responsibleUserId String?           @map("responsible_user_id") @db.Uuid
+  notes             String?
+  active            Boolean           @default(true)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  responsibleUser   User?             @relation(fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  mailMessages      ClientEmail[]
+  invoices          Invoice[]
+
+  @@index([contactEmails], type: Gin)
+  @@index([emailDomains], type: Gin)
+  @@map("clients")
+}
+
+/**
+ * Um email que um cliente mandou, lido pelo agente de faturas, com o resumo que ele fez.
+ */
+model ClientEmail {
+  id              String         @id @default(uuid()) @db.Uuid
+  clientId        String         @map("client_id") @db.Uuid
+  /// A caixa onde foi lido (a conta Google ligada); fica a null se a conta for desligada.
+  googleAccountId String?        @map("google_account_id") @db.Uuid
+  /// O endereço dessa caixa, para se saber onde procurar mesmo depois de a desligarem.
+  mailbox         String
+  gmailMessageId  String         @map("gmail_message_id")
+  gmailThreadId   String?        @map("gmail_thread_id")
+  /// O cabeçalho Message-ID: o mesmo email recebido em várias caixas guarda-se uma vez.
+  rfcMessageId    String         @unique @map("rfc_message_id")
+  fromAddress     String         @map("from_address")
+  subject         String
+  receivedAt      DateTime       @map("received_at")
+  summary         String
+  category        String
+  actionNeeded    Boolean        @default(false) @map("action_needed")
+  attachmentCount Int            @default(0) @map("attachment_count")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  client          Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  googleAccount   GoogleAccount? @relation(fields: [googleAccountId], references: [id], onDelete: SetNull)
+  invoices        Invoice[]
+
+  @@unique([googleAccountId, gmailMessageId])
+  @@index([clientId, receivedAt])
+  @@map("client_emails")
+}
+
+enum InvoiceDocType {
+  FT
+  FS
+  FR
+  NC
+  ND
+  RC
+  OUTRO
+}
+
+enum InvoiceStatus {
+  /// Extraída e coerente (NIF válido, totais batem certo).
+  EXTRAIDA
+  /// Algo não bate certo ou o modelo teve dúvidas: alguém tem de ver.
+  A_REVER
+  CONFIRMADA
+  REJEITADA
+}
+
+enum InvoiceDirection {
+  /// O cliente é o adquirente (uma despesa dele).
+  COMPRA
+  /// O cliente é o emitente (uma venda dele).
+  VENDA
+  DESCONHECIDA
+}
+
+/**
+ * Um documento fiscal anexado a um email de um cliente, com os campos que o agente extraiu.
+ */
+model Invoice {
+  id               String           @id @default(uuid()) @db.Uuid
+  clientId         String           @map("client_id") @db.Uuid
+  emailId          String           @map("email_id") @db.Uuid
+  /// A parte do email onde vem o anexo: com a conta e o id do email, é como se descarrega do Gmail.
+  attachmentPartId String           @map("attachment_part_id")
+  fileName         String           @map("file_name")
+  mimeType         String           @map("mime_type")
+  docType          InvoiceDocType   @default(OUTRO) @map("doc_type")
+  direction        InvoiceDirection @default(DESCONHECIDA)
+  number           String?
+  atcud            String?
+  issueDate        DateTime?        @map("issue_date") @db.Date
+  issuerName       String?          @map("issuer_name")
+  issuerNif        String?          @map("issuer_nif")
+  buyerName        String?          @map("buyer_name")
+  buyerNif         String?          @map("buyer_nif")
+  netTotal         Decimal?         @map("net_total") @db.Decimal(14, 2)
+  vatTotal         Decimal?         @map("vat_total") @db.Decimal(14, 2)
+  total            Decimal?         @db.Decimal(14, 2)
+  currency         String           @default("EUR")
+  /// O IVA por taxa: [{ rate, base, vat }].
+  vatBreakdown     Json?            @map("vat_breakdown")
+  confidence       Float
+  status           InvoiceStatus    @default(A_REVER)
+  /// Porque ficou a rever (em palavras).
+  reviewReasons    String[]         @map("review_reasons")
+  raw              Json
+  reviewedById     String?          @map("reviewed_by_id") @db.Uuid
+  reviewedAt       DateTime?        @map("reviewed_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  client           Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  email            ClientEmail      @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@unique([emailId, attachmentPartId])
+  @@index([clientId, issueDate])
+  @@index([status])
+  @@map("invoices")
+}
+
+/**
+ * Até onde o agente de faturas já leu cada caixa.
+ */
+model MailSyncState {
+  googleAccountId String        @id @map("google_account_id") @db.Uuid
+  /// Os emails até aqui já foram todos vistos.
+  syncedUntil     DateTime?     @map("synced_until")
+  /// Na primeira leitura (ainda sem `syncedUntil`), o início fixo da janela: não anda com o tempo
+  /// entre corridas, para nenhum email por descobrir sair dela.
+  startFrom       DateTime?     @map("start_from")
+  lastRunAt       DateTime?     @map("last_run_at")
+  lastError       String?       @map("last_error")
+  googleAccount   GoogleAccount @relation(fields: [googleAccountId], references: [id], onDelete: Cascade)
+
+  @@map("mail_sync_states")
+}
+
+/**
+ * Os emails de cada caixa já tratados (guardados, repetidos noutra caixa, ou sem nada): não se voltam a ler.
+ */
+model MailSeenMessage {
+  googleAccountId String        @map("google_account_id") @db.Uuid
+  gmailMessageId  String        @map("gmail_message_id")
+  seenAt          DateTime      @default(now()) @map("seen_at")
+  googleAccount   GoogleAccount @relation(fields: [googleAccountId], references: [id], onDelete: Cascade)
+
+  @@id([googleAccountId, gmailMessageId])
+  @@map("mail_seen_messages")
+}
+
+/**
+ * Um trinco para uma tarefa não correr duas vezes ao mesmo tempo (o agendamento e o botão).
+ */
+model JobLock {
+  name        String   @id
+  lockedUntil DateTime @map("locked_until")
+
+  @@map("job_locks")
 }

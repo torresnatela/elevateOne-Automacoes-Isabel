@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "schedules": {
+    "client-mail-sync": {
+      "schedule": "0 * * * *",
+      "timezone": "Europe/Lisbon",
+      "path": "/api/jobs/client-mail-sync",
+      "requestMethod": "POST"
+    }
+  }
+}

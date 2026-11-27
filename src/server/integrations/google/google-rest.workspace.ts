@@ -278,6 +278,43 @@ export class GoogleRestWorkspace implements GoogleWorkspace {
     return messages.map(toSummary);
   }
 
+  async messageDates(ids: string[]): Promise<Map<string, number>> {
+    const dates = new Map<string, number>();
+    // Poucos pedidos de cada vez, para não bater no limite por segundo do Gmail.
+    for (let i = 0; i < ids.length; i += 10)
+      await Promise.all(
+        ids.slice(i, i + 10).map(async (id) => {
+          // Um email cuja data não se consegue ler fica sem ela (vai para o fim da fila e é
+          // lido à parte): não pode impedir a leitura do resto da caixa.
+          try {
+            const m = await this.call(`${GMAIL}/messages/${encodeURIComponent(id)}`, {
+              // Só o formato `full` está documentado como trazendo o recurso Message inteiro (com o
+              // internalDate); `fields` corta a resposta a só esses dois campos.
+              query: { format: "full", fields: "id,internalDate" },
+            });
+            const at = Number(m?.internalDate);
+            if (Number.isFinite(at)) dates.set(id, at);
+          } catch {
+            // Sem data: ordena-se no fim.
+          }
+        }),
+      );
+    return dates;
+  }
+
+  async listMessageIds(query: string, limit: number): Promise<string[]> {
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    do {
+      const page = await this.call(`${GMAIL}/messages`, {
+        query: { q: query, maxResults: String(Math.min(500, limit - ids.length)), pageToken },
+      });
+      ids.push(...(page.messages ?? []).map((m: Json) => m.id as string));
+      pageToken = page.nextPageToken ?? undefined;
+    } while (pageToken && ids.length < limit);
+    return ids.slice(0, limit);
+  }
+
   async getEmail(id: string): Promise<EmailMessage> {
     const message = await this.call(`${GMAIL}/messages/${encodeURIComponent(id)}`, {
       query: { format: "full" },
@@ -287,6 +324,8 @@ export class GoogleRestWorkspace implements GoogleWorkspace {
       ...toSummary(message),
       body: body.length > MAX_EMAIL_BODY ? `${body.slice(0, MAX_EMAIL_BODY)}\n[…cortado]` : body,
       attachments: listAttachments(message.payload ?? {}),
+      threadId: message.threadId,
+      rfcMessageId: header(message, "Message-ID") || undefined,
     };
   }
 
