@@ -39,25 +39,17 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
   }, []);
 
   /**
-   * Pergunta até a corrida acabar (ou o tempo acabar), e atualiza a página. Acabou quando se viu
-   * uma corrida a decorrer e ela já terminou — mesmo que tenha sido outra (o agendamento, ou o
-   * botão noutro separador): o pedido daqui foi recusado por essa já estar a correr — ou quando
-   * todas as caixas têm uma corrida nova.
+   * Pergunta até não haver corrida a decorrer (ou o tempo acabar), e atualiza a página. O botão
+   * fica com o trinco antes de o servidor responder, por isso, depois do pedido, «a decorrer» é
+   * exatamente a corrida pedida — ou a que já estava a correr e fez recusar o pedido.
    */
-  function waitForRun(before: Map<string, string | null>, startedAt: number, sawRunning: boolean) {
+  function waitForRun(startedAt: number) {
     timer.current = setTimeout(async () => {
       if (gone.current) return;
       let finished = false;
       try {
-        const { mailboxes: now, running } = await api<{
-          mailboxes: MailboxView[];
-          running: boolean;
-        }>("/api/clients/sync", "GET");
-        sawRunning ||= running;
-        const allNew =
-          now.length > 0 &&
-          now.every((m) => m.lastRunAt !== null && m.lastRunAt !== before.get(m.mailbox));
-        finished = !running && (sawRunning || allNew);
+        const { running } = await api<{ running: boolean }>("/api/clients/sync", "GET");
+        finished = !running;
       } catch {
         // Uma falha de rede numa pergunta não para a espera.
       }
@@ -78,7 +70,7 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         router.refresh();
         return;
       }
-      waitForRun(before, startedAt, sawRunning);
+      waitForRun(startedAt);
     }, POLL_MS);
   }
 
@@ -86,12 +78,11 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
     setBusy(true);
     setMessage(null);
     try {
-      // O ponto de partida é o estado de agora, não o de quando a página abriu: uma corrida
-      // agendada entretanto não pode passar pela que se pediu.
-      const { mailboxes: current, running } = await api<{
-        mailboxes: MailboxView[];
-        running: boolean;
-      }>("/api/clients/sync", "GET");
+      // As caixas ligadas agora, não as de quando a página abriu.
+      const { mailboxes: current } = await api<{ mailboxes: MailboxView[] }>(
+        "/api/clients/sync",
+        "GET",
+      );
       // Saiu-se da página enquanto se esperava: não se pede a corrida nem se mexe em nada.
       if (gone.current) return;
       // Sem caixas ligadas não há corrida para ver acabar: não se diz que sincronizou.
@@ -102,15 +93,17 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         });
         return;
       }
-      await api("/api/clients/sync", "POST");
+      const { started } = await api<{ started: boolean }>("/api/clients/sync", "POST");
       if (gone.current) return;
       setMessage({
         error: false,
-        text: "O agente começou a ler os emails. A página atualiza-se quando acabar.",
+        text: started
+          ? "O agente começou a ler os emails. A página atualiza-se quando acabar."
+          : "O agente já estava a ler os emails. A página atualiza-se quando acabar.",
       });
       if (timer.current) clearTimeout(timer.current);
       setWaiting(true);
-      waitForRun(new Map(current.map((m) => [m.mailbox, m.lastRunAt])), Date.now(), running);
+      waitForRun(Date.now());
     } catch (e) {
       if (!gone.current) setMessage({ error: true, text: (e as Error).message });
     } finally {

@@ -196,6 +196,36 @@ describe("ClientMailSyncService", () => {
     expect(extractor.calls[0].attachments.map((a) => a.partId)).toEqual(["3"]);
   });
 
+  it("start fica com o trinco antes de responder e só o solta quando a corrida acaba", async () => {
+    const { mail, service, addEmail } = await setup();
+    addEmail("u1", email("m1"));
+    let task: (() => Promise<void>) | null = null;
+    await expect(service.start((t) => (task = t))).resolves.toBe(true);
+    // Ainda não correu, mas já conta como a decorrer: quem espera não vê um falso fim.
+    expect(await service.isRunning()).toBe(true);
+    await task!();
+    expect(await service.isRunning()).toBe(false);
+    expect(mail.emails).toHaveLength(1);
+  });
+
+  it("start diz que não começou quando outra corrida já está a decorrer", async () => {
+    const { mail, service } = await setup();
+    mail.locked = true;
+    const defer = vi.fn();
+    await expect(service.start(defer)).resolves.toBe(false);
+    expect(defer).not.toHaveBeenCalled();
+  });
+
+  it("start solta o trinco mesmo quando a corrida falha", async () => {
+    const { mail, service, workspaces } = await setup();
+    let task: (() => Promise<void>) | null = null;
+    await service.start((t) => (task = t));
+    vi.spyOn(mail, "getSyncState").mockRejectedValue(new Error("base em baixo"));
+    workspaces.clear();
+    await task!();
+    expect(mail.locked).toBe(false);
+  });
+
   it("diz se há uma corrida a decorrer, de onde quer que tenha vindo", async () => {
     const { mail, service } = await setup();
     expect(await service.isRunning()).toBe(false);

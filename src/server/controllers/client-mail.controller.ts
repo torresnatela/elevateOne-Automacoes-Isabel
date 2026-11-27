@@ -42,14 +42,9 @@ export class ClientMailController {
   async syncNow(req: NextRequest) {
     try {
       await requireSession(req);
-      this.defer(async () => {
-        try {
-          await this.sync.run();
-        } catch (error) {
-          console.error(error);
-        }
-      });
-      return NextResponse.json({ ok: true }, { status: 202 });
+      // `started: false`: outra corrida (o agendamento, ou outro separador) já estava a decorrer.
+      const started = await this.sync.start(this.defer);
+      return NextResponse.json({ started }, { status: 202 });
     } catch (err) {
       return handleError(err);
     }

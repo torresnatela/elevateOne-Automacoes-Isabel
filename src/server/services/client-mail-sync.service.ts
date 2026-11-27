@@ -185,21 +185,46 @@ export class ClientMailSyncService {
   async run(): Promise<SyncReport> {
     if (!(await this.deps.mail.tryLock(LOCK, LOCK_TTL_MS))) return { skipped: true, accounts: [] };
     try {
-      const clients = (await this.deps.clients.list()).filter(
-        (c) => c.contactEmails.length || c.emailDomains.length,
-      );
-      const accounts = await this.deps.accounts.listAll();
-      const reports: AccountReport[] = [];
-      let budget = this.options.maxEmailsPerRun;
-      for (const account of accounts) {
-        const report = await this.syncAccount(account, clients, budget);
-        budget -= report.newEmails;
-        reports.push(report);
-      }
-      return { skipped: false, accounts: reports };
+      return await this.runLocked();
     } finally {
       await this.deps.mail.unlock(LOCK);
     }
+  }
+
+  /**
+   * Para o botão: fica com o trinco já, antes de responder, e corre depois (com `defer`).
+   * Devolve se começou uma corrida; `false` quer dizer que outra já estava a correr. Assim,
+   * enquanto o trinco estiver seguro há uma corrida a decorrer, e quem espera só tem de ver
+   * quando ele se solta.
+   */
+  async start(defer: (task: () => Promise<void>) => void): Promise<boolean> {
+    if (!(await this.deps.mail.tryLock(LOCK, LOCK_TTL_MS))) return false;
+    defer(async () => {
+      try {
+        await this.runLocked();
+      } catch (error) {
+        this.deps.log?.(`Faturas: a corrida falhou: ${(error as Error).message}`);
+      } finally {
+        await this.deps.mail.unlock(LOCK);
+      }
+    });
+    return true;
+  }
+
+  /** A corrida em si, com o trinco já na mão de quem chama. */
+  private async runLocked(): Promise<SyncReport> {
+    const clients = (await this.deps.clients.list()).filter(
+      (c) => c.contactEmails.length || c.emailDomains.length,
+    );
+    const accounts = await this.deps.accounts.listAll();
+    const reports: AccountReport[] = [];
+    let budget = this.options.maxEmailsPerRun;
+    for (const account of accounts) {
+      const report = await this.syncAccount(account, clients, budget);
+      budget -= report.newEmails;
+      reports.push(report);
+    }
+    return { skipped: false, accounts: reports };
   }
 
   private async syncAccount(
