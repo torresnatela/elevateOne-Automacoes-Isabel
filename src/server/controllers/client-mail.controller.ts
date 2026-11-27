@@ -53,10 +53,11 @@ export class ClientMailController {
   async status(req: NextRequest) {
     try {
       await requireSession(req);
-      const [mailboxes, running] = await Promise.all([
-        this.mail.mailboxes(),
-        this.sync.isRunning(),
-      ]);
+      // Primeiro o trinco, depois as caixas (nunca em paralelo): a corrida grava o resultado —
+      // incluindo a falha — antes de soltar o trinco, por isso, se aqui se vê que já não corre,
+      // as caixas lidas a seguir já trazem esse resultado.
+      const running = await this.sync.isRunning();
+      const mailboxes = await this.mail.mailboxes();
       return NextResponse.json({ mailboxes, running });
     } catch (err) {
       return handleError(err);
