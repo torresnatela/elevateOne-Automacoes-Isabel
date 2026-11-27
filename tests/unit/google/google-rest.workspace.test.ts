@@ -707,14 +707,14 @@ describe("GoogleRestWorkspace: permissões em falta", () => {
 });
 
 describe("GoogleRestWorkspace: ids e datas para o agente de faturas", () => {
-  it("messageDates pede o formato metadata só com id e internalDate, e lê a data", async () => {
+  it("messageDates pede o formato full cortado a id e internalDate, e lê a data", async () => {
     const f = fakeFetch(
       { json: { id: "a", internalDate: "1793491200000" } },
       { json: { id: "b" } },
     );
     const dates = await workspace(f).messageDates(["a", "b"]);
     expect(f.calls[0].url.pathname).toBe("/gmail/v1/users/me/messages/a");
-    expect(f.calls[0].url.searchParams.get("format")).toBe("metadata");
+    expect(f.calls[0].url.searchParams.get("format")).toBe("full");
     expect(f.calls[0].url.searchParams.get("fields")).toBe("id,internalDate");
     expect(dates.get("a")).toBe(1793491200000);
     expect(dates.has("b")).toBe(false);

@@ -29,8 +29,10 @@ export interface SyncOptions {
   maxAttachmentsPerEmail: number;
   /** Quantos bytes de anexos vão, no máximo, num só pedido ao modelo (a API aceita 32 MB, já em base64). */
   maxRequestBytes: number;
-  /** Quantos ids se pedem ao Gmail por procura; se vierem todos, a procura não ficou completa. */
+  /** Quantos ids se pedem ao Gmail por procura; se vierem todos, a janela divide-se. */
   maxDiscovered: number;
+  /** Até quantos ids se percorrem num só dia (por omissão, todos: nenhum fica por descobrir). */
+  maxPerDay: number;
 }
 
 export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
@@ -42,6 +44,7 @@ export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   maxAttachmentsPerEmail: 10,
   maxRequestBytes: 18 * 1024 * 1024,
   maxDiscovered: 2000,
+  maxPerDay: Number.POSITIVE_INFINITY,
 };
 
 export interface AccountReport {
@@ -78,8 +81,8 @@ const epoch = (d: Date) => Math.floor(d.getTime() / 1000);
 /**
  * Todos os ids de uma procura entre duas datas. O Gmail devolve só os mais recentes até ao
  * máximo pedido: quando a janela enche, divide-se ao meio até cada metade caber. Uma janela de
- * um dia que ainda enche percorre-se toda, página a página, até `dayMax`. Devolve também se,
- * mesmo assim, ficou um dia por percorrer (só com mais de `dayMax` emails nesse dia).
+ * um dia que ainda enche percorre-se toda, página a página (sem teto, por omissão: nenhum email
+ * fica por descobrir). Com `dayMax` finito, diz se um dia ficou cortado.
  */
 export async function discover(
   list: (query: string, limit: number) => Promise<string[]>,
@@ -87,7 +90,7 @@ export async function discover(
   from: Date,
   to: Date,
   max: number,
-  dayMax: number = max * 10,
+  dayMax: number = Number.POSITIVE_INFINITY,
 ): Promise<{ ids: string[]; truncated: boolean }> {
   const window = `${query} after:${epoch(from)} before:${epoch(to)}`;
   const found = await list(window, max);
@@ -240,6 +243,7 @@ export class ClientMailSyncService {
           since,
           until,
           this.options.maxDiscovered,
+          this.options.maxPerDay,
         );
         truncated ||= found.truncated;
         for (const id of found.ids) ids.add(id);

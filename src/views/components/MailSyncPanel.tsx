@@ -85,6 +85,8 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         "/api/clients/sync",
         "GET",
       );
+      // Saiu-se da página enquanto se esperava: não se pede a corrida nem se mexe em nada.
+      if (gone.current) return;
       // Sem caixas ligadas não há corrida para ver acabar: não se diz que sincronizou.
       if (current.length === 0) {
         setMessage({
@@ -94,6 +96,7 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
         return;
       }
       await api("/api/clients/sync", "POST");
+      if (gone.current) return;
       setMessage({
         error: false,
         text: "O agente começou a ler os emails. A página atualiza-se quando acabar.",
@@ -102,9 +105,9 @@ export function MailSyncPanel({ mailboxes }: { mailboxes: MailboxView[] }) {
       setWaiting(true);
       waitForRun(new Map(current.map((m) => [m.mailbox, m.lastRunAt])), Date.now());
     } catch (e) {
-      setMessage({ error: true, text: (e as Error).message });
+      if (!gone.current) setMessage({ error: true, text: (e as Error).message });
     } finally {
-      setBusy(false);
+      if (!gone.current) setBusy(false);
     }
   }
 

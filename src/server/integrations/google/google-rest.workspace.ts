@@ -288,9 +288,9 @@ export class GoogleRestWorkspace implements GoogleWorkspace {
           // lido à parte): não pode impedir a leitura do resto da caixa.
           try {
             const m = await this.call(`${GMAIL}/messages/${encodeURIComponent(id)}`, {
-              // `minimal` não promete o internalDate; `metadata` traz o recurso Message com ele
-              // (e `fields` corta a resposta a só isso).
-              query: { format: "metadata", fields: "id,internalDate" },
+              // Só o formato `full` está documentado como trazendo o recurso Message inteiro (com o
+              // internalDate); `fields` corta a resposta a só esses dois campos.
+              query: { format: "full", fields: "id,internalDate" },
             });
             const at = Number(m?.internalDate);
             if (Number.isFinite(at)) dates.set(id, at);

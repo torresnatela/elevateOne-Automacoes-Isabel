@@ -1,5 +1,6 @@
 import { PrismaClientMailRepository } from "@/server/repositories/client-mail.repository";
 import { PrismaClientRepository } from "@/server/repositories/client.repository";
+import { PrismaGoogleAccountRepository } from "@/server/repositories/google-account.repository";
 import { clientSchema } from "@/server/validators/client.schemas";
 import { prisma, resetDatabase } from "../setup/db";
 
@@ -188,6 +189,75 @@ describe("PrismaClientMailRepository", () => {
     release();
     await Promise.all([swap, write]);
     expect(await repo.getSyncState(account.id)).toBeNull();
+  });
+
+  describe("trocar de caixa enquanto a corrida grava (os métodos reais, nas duas ordens)", () => {
+    const accounts = new PrismaGoogleAccountRepository(prisma);
+    const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    /**
+     * Segura o trinco da conta noutra ligação, põe `first` e depois `second` na fila do trinco
+     * (o Postgres serve-os por ordem de chegada) e solta: corre os dois nessa ordem.
+     */
+    async function inOrder(
+      accountId: string,
+      first: () => Promise<unknown>,
+      second: () => Promise<unknown>,
+    ) {
+      let release!: () => void;
+      const held = new Promise<void>((r) => (release = r));
+      let locked!: () => void;
+      const isLocked = new Promise<void>((r) => (locked = r));
+      const holder = prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM "google_accounts" WHERE "id" = ${accountId}::uuid FOR UPDATE`;
+        locked();
+        await held;
+      });
+      await isLocked;
+      const a = first();
+      await pause(150);
+      const b = second();
+      await pause(150);
+      release();
+      await Promise.all([holder, a, b]);
+    }
+
+    const state = (googleAccountId: string) => ({
+      googleAccountId,
+      syncedUntil: new Date(),
+      startFrom: null,
+      lastRunAt: new Date(),
+      lastError: null,
+    });
+    const switchMailbox = (userId: string) =>
+      accounts.save({ userId, email: "nova@x.pt", refreshTokenEncrypted: "y", scopes: "" });
+
+    it.each(["escrita primeiro", "troca primeiro"])(
+      "a marca de leitura da caixa antiga nunca fica na nova (%s)",
+      async (order) => {
+        const { account, user } = await fixtures();
+        const write = () => repo.setSyncState(state(account.id), "isabel@x.pt");
+        const swap = () => switchMailbox(user.id);
+        if (order === "escrita primeiro") await inOrder(account.id, write, swap);
+        else await inOrder(account.id, swap, write);
+        expect(await repo.getSyncState(account.id)).toBeNull();
+      },
+    );
+
+    it.each(["escrita primeiro", "troca primeiro"])(
+      "um email da caixa antiga nunca fica ligado à conta nova (%s)",
+      async (order) => {
+        const { account, client, user } = await fixtures();
+        const write = () => repo.saveEmail(newEmail(client.id, account.id), [newInvoice]);
+        const swap = () => switchMailbox(user.id);
+        if (order === "escrita primeiro") await inOrder(account.id, write, swap);
+        else await inOrder(account.id, swap, write);
+        expect(await prisma.clientEmail.count({ where: { googleAccountId: account.id } })).toBe(0);
+        expect(await prisma.mailSeenMessage.count({ where: { googleAccountId: account.id } })).toBe(
+          0,
+        );
+      },
+    );
   });
 
   it("o mesmo email (Message-ID) não se guarda duas vezes", async () => {

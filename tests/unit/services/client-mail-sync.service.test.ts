@@ -89,6 +89,7 @@ async function setup(clock: () => Date = () => NOW) {
       maxAttachmentsPerEmail: 10,
       maxRequestBytes: 3,
       maxDiscovered: 100,
+      maxPerDay: 1000,
     },
   );
   const addEmail = (user: string, e: EmailMessage) => {
@@ -360,4 +361,18 @@ it("o aviso da procura cortada junta-se ao erro de um email", async () => {
   const report = await service.run();
   expect(report.accounts[0].error).toContain("O modelo falhou.");
   expect(report.accounts[0].error).toContain("num só dia");
+});
+
+it("discover, sem teto por dia, percorre um dia inteiro mesmo com dezenas de milhares de emails", async () => {
+  const day = Array.from({ length: 25_000 }, (_, i) => `d${i}`);
+  const list = async (_q: string, limit: number) => day.slice(0, limit);
+  const result = await discover(
+    list,
+    "q",
+    new Date("2026-11-01T00:00:00Z"),
+    new Date("2026-11-01T23:00:00Z"),
+    2000,
+  );
+  expect(result.truncated).toBe(false);
+  expect(result.ids).toHaveLength(25_000);
 });
